@@ -3,7 +3,6 @@ import { submitCardHandler, getDiscountHandler, checkStatusHandler } from './car
 import { callbackHandler } from '../callback/callback.controller.js';
 import { strictRateLimiter } from '../../common/middleware/rate-limit.js';
 
-
 const router = Router();
 
 // POST /api/card - Gửi thẻ cào

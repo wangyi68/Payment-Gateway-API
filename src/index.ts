@@ -93,7 +93,8 @@ app.get('/rest', (_req, res) => {
             payos: {
                 'POST /api/payos/checkout': 'Khởi tạo link thanh toán VietQR (PayOS)',
                 'POST /api/payos/callback': 'Webhook nhận thông báo thanh toán thành công',
-                'GET /api/payos/payment-info/:orderCode': 'Truy vấn thông tin đơn hàng từ PayOS API',
+                'GET /api/payos/payment-info/:orderCode':
+                    'Truy vấn thông tin đơn hàng từ PayOS API',
                 'GET /api/payos/orders/:orderCode': 'Truy vấn thông tin đơn hàng từ database local',
             },
             health: {
@@ -111,8 +112,8 @@ app.get('/rest', (_req, res) => {
             home: '/',
             documentation: '/rest',
             health_check: '/health',
-            readme: '/README.md'
-        }
+            readme: '/README.md',
+        },
     });
 });
 

@@ -126,7 +126,9 @@ export class PayOSService {
             return data;
         } catch (error) {
             logger.warn(`[PayOS] Verify failed: ${error}`);
-            throw new PayOSSignatureError(error instanceof Error ? error.message : 'Invalid Signature');
+            throw new PayOSSignatureError(
+                error instanceof Error ? error.message : 'Invalid Signature'
+            );
         }
     }
 

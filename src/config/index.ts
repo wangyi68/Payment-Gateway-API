@@ -12,8 +12,6 @@ const envSchema = z.object({
     PAYOS_API_KEY: z.string().min(1, 'PayOS API Key is required'),
     PAYOS_CHECKSUM_KEY: z.string().min(1, 'PayOS Checksum Key is required'),
 
-
-
     // Server
     PORT: z.string().default('3000').transform(Number),
     HOST: z.string().default('localhost'),
@@ -88,10 +86,10 @@ export const config = {
     },
     redis: parsed.data.REDIS_HOST
         ? {
-            host: parsed.data.REDIS_HOST,
-            port: parsed.data.REDIS_PORT,
-            password: parsed.data.REDIS_PASSWORD,
-        }
+              host: parsed.data.REDIS_HOST,
+              port: parsed.data.REDIS_PORT,
+              password: parsed.data.REDIS_PASSWORD,
+          }
         : null,
     scheduler: {
         enabled: parsed.data.SCHEDULER_ENABLED,

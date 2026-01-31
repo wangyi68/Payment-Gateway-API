@@ -143,8 +143,8 @@ export function theSieuTocCallbackHandler(req: Request, res: Response<ApiRespons
         // Log to card.log file (tất cả giao dịch)
         cardLogger.info(
             `User: ${transaction.name} | Status: ${data.status} | ` +
-            `Type: ${data.card_type} | Amount: ${data.amount} | ` +
-            `Real: ${data.real_amount} | Content: ${data.content}`
+                `Type: ${data.card_type} | Amount: ${data.amount} | ` +
+                `Real: ${data.real_amount} | Content: ${data.content}`
         );
 
         res.json({
@@ -276,5 +276,3 @@ export async function payOSWebhookHandler(req: Request, res: Response): Promise<
         });
     }
 }
-
-

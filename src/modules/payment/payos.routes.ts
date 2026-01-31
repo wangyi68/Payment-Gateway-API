@@ -3,7 +3,6 @@ import { payOSController } from './payos.controller.js';
 import { asyncHandler } from '../../common/middleware/index.js';
 import { strictRateLimiter } from '../../common/middleware/rate-limit.js';
 
-
 const router = Router();
 
 // ============================================================
@@ -76,9 +75,5 @@ router.post(
     '/callback',
     asyncHandler((req, res) => payOSController.handleWebhook(req, res))
 );
-
-
-
-
 
 export default router;

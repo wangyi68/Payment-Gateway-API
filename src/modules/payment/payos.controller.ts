@@ -65,7 +65,7 @@ export class PayOSController {
                 // Date.now() = 1709... (13 số). Max Safe Integer = 9007... (16 số).
                 // Ta có thể thêm 3 số random vào đuôi.
                 // Tuy nhiên để ngắn gọn và dễ đọc, ta dùng Date.now() là đủ unique cho traffic thấp/trung bình.
-                // Để chắc chắn hơn, ta dùng: HHmmss + Random(6 số) -> đảm bảo ngắn và unique trong ngày, 
+                // Để chắc chắn hơn, ta dùng: HHmmss + Random(6 số) -> đảm bảo ngắn và unique trong ngày,
                 // hoặc dùng timestamp.
                 // PayOS yêu cầu: < 9e15. Date.now() ~ 1.7e12.
                 // Vậy ta có thể nhân Date.now() * 100 + random(0-99) => 15 chữ số. An toàn.
@@ -121,7 +121,6 @@ export class PayOSController {
      * Xử lý webhook payout từ PayOS
      * Delegate to callback controller
      */
-
 
     /**
      * GET /api/payos/payment-info/:orderCode
