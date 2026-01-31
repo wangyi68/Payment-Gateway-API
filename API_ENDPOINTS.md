@@ -1,171 +1,113 @@
-# 📑 Tài Liệu Chi Tiết API Endpoints
+# Tài liệu API - Payment Gateway
 
-Tài liệu này cung cấp hướng dẫn đầy đủ về các điểm cuối (endpoints) API, cấu trúc dữ liệu, mã lỗi và logic xử lý của hệ thống **payment-gateway-api**.
+Tài liệu này liệt kê toàn bộ các API Endpoints hiện có trong hệ thống, bao gồm Nạp thẻ cào (TheSieuToc), Chuyển khoản QR (PayOS), Quản lý giao dịch và Hệ thống.
 
----
+## 1. Module Thẻ Cào (Card Top-up)
 
-## 🧭 Mục lục
-1. [Xác Thực & Bảo Mật](#xác-thực--bảo-mật)
-2. [Health Check (Kiểm tra hệ thống)](#health-check-kiểm-tra-hệ-thống)
-3. [Card Module (Thẻ cào - TheSieuToc)](#card-module-thẻ-cào---thesieutoc)
-4. [PayOS Module (Thanh toán QR/Bank)](#payos-module-thanh-toán-qrbank)
-5. [Transaction Module (Quản lý giao dịch)](#transaction-module-quản-lý-giao-dịch)
-6. [System Module (Thông tin server)](#system-module-thông-tin-server)
-7. [Phụ lục Mã lỗi (Error Codes)](#phụ-lục-mã-lỗi)
+Quản lý việc gửi thẻ cào, lấy chiết khấu và nhận callback từ provider TheSieuToc.
 
----
+### 1.1 Gửi thẻ cào
+- **Endpoint:** `POST /api/card`
+- **Mô tả:** Gửi thông tin thẻ cào lên hệ thống để xử lý.
+- **Body (JSON):**
+  ```json
+  {
+    "username": "tên_người_dùng",
+    "card_type": "Viettel",
+    "card_amount": "10000",
+    "pin": "1234567890123",
+    "serial": "100012345678"
+  }
+  ```
+- **Phản hồi:** Trả về mã giao dịch (`transaction_id`) để theo dõi.
 
-## 🔐 Xác Thực & Bảo Mật
+### 1.2 Lấy chiết khấu thẻ
+- **Endpoint:** `GET /api/card/discount/:account?`
+- **Mô tả:** Lấy bảng chiết khấu hiện tại của các loại thẻ.
+- **Tham số:** `:account` (không bắt buộc) - Tên tài khoản để lấy chiết khấu riêng (nếu có).
 
-- **Môi trường**: Hệ thống tự động nhận diện `development` hoặc `production` từ file `.env`.
-- **Ngrok**: Khi chạy ở local, Ngrok sẽ tạo một public URL (ví dụ: `https://abcd.ngrok-free.dev`) để bạn có thể nhận callback từ TheSieuToc/PayOS.
-- **Webhook Security**:
-    - **TheSieuToc**: Xác thực dựa trên IP và dữ liệu trả về.
-    - **PayOS**: Xác thực bằng HMAC SHA256 thông qua SDK chính thức.
+### 1.3 Kiểm tra trạng thái thẻ
+- **Endpoint:** `POST /api/card/status`
+- **Mô tả:** Kiểm tra trạng thái của một thẻ đã gửi dựa trên `transaction_id`.
+- **Body (JSON):**
+  ```json
+  {
+    "transaction_id": "Mã_giao_dịch_của_bạn"
+  }
+  ```
 
----
-
-## 🏥 Health Check (Kiểm tra hệ thống)
-
-### 1. Chi tiết trạng thái (Full Health)
-`GET /health`
-
-**Mô tả:** Kiểm tra kết nối Database, Redis, PayOS API, và Ngrok.
-**Response (200 OK):**
-```json
-{
-    "status": "healthy",
-    "timestamp": "2026-01-31T12:30:00.000Z",
-    "services": {
-        "database": { "status": "up", "latency": 2 },
-        "thesieutoc": { "status": "up" },
-        "payos": { "status": "up", "message": "Configured" }
-    }
-}
-```
+### 1.4 Provider Callback (TheSieuToc)
+- **Endpoint:** `POST /api/card/callback`
+- **Mô tả:** Endpoint dành cho TheSieuToc gọi về khi thẻ xử lý xong.
+- **Bảo mật:** Tự động xác thực dữ liệu qua mã PIN/Serial đối chiếu trong DB.
 
 ---
 
-## 💳 Card Module (Thẻ cào - TheSieuToc)
+## 2. Module Thanh Toán QR (PayOS)
 
-> **Cấu hình**: Yêu cầu `THESIEUTOC_API_KEY` trong `.env`.
+Quản lý việc tạo link thanh toán VietQR và xử lý webhook.
 
-### 1. Gửi thẻ nạp
-`POST /api/card`
+### 2.1 Tạo link thanh toán
+- **Endpoint:** `POST /api/payos/checkout`
+- **Mô tả:** Tạo link thanh toán VietQR mới.
+- **Body (JSON):**
+  ```json
+  {
+    "orderCode": 123456,
+    "amount": 50000,
+    "description": "Nạp tiền game",
+    "returnUrl": "https://your-site.com/success",
+    "cancelUrl": "https://your-site.com/cancel"
+  }
+  ```
 
-**Request Body:**
-| Field | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| `username` | String | Yes | Tên người dùng hoặc ID nạp thẻ |
-| `card_type` | String | Yes | `Viettel`, `Mobifone`, `Vinaphone`, `Vietnamobile`, `Zing`, `Gate`, `Garena`, `Vcoin` |
-| `card_amount` | Number | Yes | Mệnh giá thẻ (10000, 20000, ...) |
-| `serial` | String | Yes | Số Serial của thẻ |
-| `pin` | String | Yes | Mã nạp thẻ (Mật mã dưới lớp cào) |
+### 2.2 Lấy thông tin thanh toán (PayOS API)
+- **Endpoint:** `GET /api/payos/payment-info/:orderCode`
+- **Mô tả:** Lấy thông tin chi tiết thanh toán trực tiếp từ hệ thống PayOS.
 
-**Logic xử lý:**
-1. Kiểm tra định dạng Serial/PIN (Ví dụ: Viettel 11-15 số).
-2. Kiểm tra Blacklist (Nếu thẻ đã từng gửi trong 24h qua sẽ bị từ chối ngay).
-3. Gửi sang TheSieuToc v2 API.
-4. Lưu trạng thái `PENDING` vào Database local.
+### 2.3 Tra cứu đơn hàng (Local DB)
+- **Endpoint:** `GET /api/payos/orders/:orderCode`
+- **Mô tả:** Tra cứu trạng thái đơn hàng PayOS đã lưu trong database của server.
 
----
-
-### 2. Lấy chiết khấu hiện tại
-`GET /api/card/discount/:account?`
-
-**Mô tả:** Trả về bảng chiết khấu (%) hiện tại của các nhà mạng. Càng thấp càng tốt (ví dụ: 30 nghĩa là bạn nhận được 70% giá trị thẻ).
-
----
-
-### 3. Kiểm tra trạng thái thẻ (Manual Check)
-`POST /api/card/status`
-
-**Body:** `{"transaction_id": "Mã_giao_dịch_trả-về-khi-gửi-thẻ"}`
-**Mô tả:** Chủ động hỏi API TheSieuToc về tình trạng thẻ nếu chưa nhận được callback.
+### 2.4 Webhook Callback
+- **Endpoint:** `POST /api/payos/callback`
+- **Mô tả:** Nhận webhook thông báo thanh toán thành công từ PayOS.
+- **Bảo mật:** Kiểm tra Signature (HMAC SHA256) cực kỳ chặt chẽ, chống giả mạo 100%.
 
 ---
 
-## 📲 PayOS Module (Thanh toán QR/Bank)
+## 3. Quản lý Giao dịch (Transaction Management)
 
-> **Cấu hình**: Yêu cầu `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`.
+### 3.1 Lịch sử giao dịch
+- **Endpoint:** `GET /api/transaction/history`
+- **Mô tả:** Lấy danh sách 50 giao dịch thành công gần nhất.
 
-### 1. Tạo Link Thanh Toán
-`POST /api/payos/checkout`
+### 3.2 Tìm kiếm giao dịch
+- **Endpoint:** `GET /api/transaction/search?query=...`
+- **Mô tả:** Tìm kiếm giao dịch theo tên người dùng, serial thẻ hoặc mã đơn hàng.
 
-**Request Body:**
-```json
-{
-    "amount": 20000,
-    "description": "Thanh toán đơn hàng #123",
-    "returnUrl": "https://yoursite.com/success",
-    "cancelUrl": "https://yoursite.com/cancel",
-    "orderCode": 123456 
-}
-```
-**Đặc điểm nổi bật:**
-- **orderCode**: Trường này là **tùy chọn (Optional)**. Nếu bạn bỏ trống, Server sẽ tự sinh một dãy số duy nhất dựa trên `Timestamp + Random`.
-- **An toàn**: Server lưu đơn hàng vào DB trước khi gọi PayOS để đảm bảo không mất dữ liệu.
+### 3.3 Chi tiết log giao dịch
+- **Endpoint:** `GET /api/transaction/:id/logs`
+- **Mô tả:** Xem chi tiết log hệ thống và raw data của một giao dịch cụ thể.
 
 ---
 
-### 2. Webhook Callback (Tự động)
-`POST /api/payos/callback`
+## 4. Hệ thống & Sức khỏe (System & Health)
 
-**Mô tả:** PayOS gọi vào đây khi khách quét QR thành công.
-- **Xác thực**: Sử dụng `payOS.webhooks.verify(body)` để đảm bảo dữ liệu chưa bị can thiệp.
-- **Hành động**: Cập nhật trạng thái `SUCCESS` trong Database và ghi log vào `cardsuccess.log`.
+Các endpoint kỹ thuật để giám sát server.
 
----
-
-### 3. Xem đơn hàng (Local)
-`GET /api/payos/orders/:orderCode`
-**Mô tả:** Xem lịch sử đơn hàng PayOS lưu tại Database của bạn (Nhanh, không cần mạng).
+- `GET /api/system/info`: Thông tin tổng quan về server (Uptime, Memory, Platform).
+- `GET /api/system/health`: Kiểm tra sức khỏe toàn diện (DB, Queue, Scheduler).
+- `GET /api/system/health/ping`: Phản hồi nhanh 'pong' để check alive.
+- `GET /api/system/health/version`: Lấy phiên bản code hiện tại.
 
 ---
 
-### 4. Truy vấn đơn hàng (PayOS)
-`GET /api/payos/payment-info/:orderCode`
-**Mô tả:** Hỏi trực tiếp PayOS về đơn hàng (Chính xác tuyệt đối, cần kết nối mạng).
-
----
-
-## 📊 Transaction Module (Quản lý giao dịch)
-
-### 1. Lấy lịch sử giao dịch
-`GET /api/transaction/history?limit=20`
-
-**Response:** Trả về danh sách giao dịch thẻ cào và PayOS mới nhất, bao gồm cả trạng thái hiển thị bằng tiếng Việt.
-
----
-
-### 2. Tìm kiếm nâng cao
-`GET /api/transaction/search`
-
-**Query Params:**
-- `serial`: Tìm theo số serial thẻ.
-- `trans_id`: Tìm theo mã giao dịch hệ thống.
-- `status`: Lọc theo trạng thái (0: Chờ, 1: Thành công, 2: Thất bại).
-
----
-
-## 📝 Nhật Ký Hệ Thống (Logging)
-
-Hệ thống phân tách log để dễ dàng quản lý:
-1. **`logs/combined.log`**: Toàn bộ nhật ký hoạt động.
-2. **`logs/error.log`**: Chỉ chứa các lỗi nghiêm trọng.
-3. **`logs/card.log`**: Lịch sử gửi và nhận thẻ cào.
-4. **`logs/cardsuccess.log`**: **(Quan trọng)** Chứa danh sách các thẻ nạp TIỀN ĐÃ VÀO (bao gồm thẻ đúng mệnh giá và sai mệnh giá). File này không bị xóa bởi hệ thống dọn dẹp tự động.
-
----
-
-## 🛠 Phụ Lục Mã Lỗi
-
-| Mã lỗi | Ý nghĩa | Cách khắc phục |
-| :--- | :--- | :--- |
-| `VALIDATION_ERROR` | Dữ liệu gửi lên không đúng định dạng | Kiểm tra lại body request (số tiền, định dạng thẻ) |
-| `PAYOS_SIGNATURE_INVALID` | Chữ ký Webhook không khớp | Kiểm tra `PAYOS_CHECKSUM_KEY` trong `.env` |
-| `DUPLICATE_CARD` | Thẻ đã được gửi trước đó | Đợi 24h hoặc kiểm tra lại lịch sử |
-| `INTERNAL_ERROR` | Lỗi máy chủ | Kiểm tra `logs/error.log` để biết chi tiết |
-
----
-*Tài liệu được cập nhật mới nhất vào ngày: 31/01/2026*
+## Ghi chú chung
+1.  **Chống Spam:** Các endpoint nhạy cảm (`/api/card`, `/api/payos/checkout`) được bảo vệ bởi **Strict Rate Limiter**.
+2.  **Định dạng dữ liệu:** Mọi yêu cầu và phản hồi đều sử dụng `application/json`.
+3.  **Mã trạng thái:**
+    *   `0`: PENDING (Đang chờ)
+    *   `1`: SUCCESS (Thành công)
+    *   `2`: FAILED (Thất bại)
+    *   `3`: WRONG_AMOUNT (Sai mệnh giá)

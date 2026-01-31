@@ -81,6 +81,8 @@ export async function submitCardHandler(req: Request, res: Response<ApiResponse>
                 pin: data.pin,
                 seri: data.serial,
                 type: data.card_type,
+                ip_address: req.ip || req.headers['x-forwarded-for']?.toString(),
+                user_agent: req.headers['user-agent'],
             });
 
             // Add to pending check queue

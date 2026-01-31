@@ -115,10 +115,12 @@ src/
 ## 📝 Logging System
 
 Hệ thống ghi log vào thư mục `logs/`:
-- `combined.log`: Tất cả hoạt động.
-- `error.log`: Chỉ ghi lỗi.
-- `card.log`: Log chi tiết giao dịch thẻ.
-- **`cardsuccess.log`**: Lưu trữ vĩnh viễn các thẻ nạp thành công (Bao gồm thẻ đúng và thẻ sai mệnh giá).
+- `combined.log`: Toàn bộ nhật ký hoạt động của hệ thống.
+- `error.log`: Chỉ ghi lại các lỗi phát sinh (Runtime Errors, API Errors).
+- `card.log`: Lịch sử chi tiết việc gửi và nhận kết quả thẻ cào.
+- `payos.log`: Nhật ký tạo link thanh toán và callback từ PayOS.
+- **`cardsuccess.log`**: Lưu trữ vĩnh viễn các giao dịch thẻ thành công (bao gồm cả sai mệnh giá).
+- **`payossuccess.log`**: Lưu trữ vĩnh viễn các đơn hàng ngân hàng/QR đã thanh toán xong.
 
 ## 📄 License
 

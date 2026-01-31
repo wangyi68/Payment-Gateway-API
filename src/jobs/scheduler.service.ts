@@ -1,8 +1,9 @@
 /**
  * Scheduler Service
- * - Kiểm tra các giao dịch đang chờ
+ * - Kiểm tra các giao dịch đang chờ (Card & PayOS)
  * - Tự động retry callback thất bại
  * - Dọn dẹp dữ liệu cũ
+ * - Báo cáo doanh thu hàng ngày
  */
 
 import * as cron from 'node-cron';
@@ -12,6 +13,7 @@ import { db } from '../database/index.js';
 import { logger } from '../common/utils/logger.js';
 import { checkCardStatus } from '../modules/card/thesieutoc.service.js';
 import { updateTransactionStatus } from '../modules/transaction/transaction.service.js';
+import { payOSService } from '../modules/payment/payos.service.js';
 import { getDueCallbackRetries, rescheduleCallbackRetry } from './queue.service.js';
 import { TransactionStatus } from '../database/index.js';
 import { CHECK_STATUS } from '../common/types/index.js';
@@ -31,15 +33,17 @@ interface ScheduledTask {
 const scheduledTasks: ScheduledTask[] = [];
 
 // ============================================================
-// 1. Kiểm tra giao dịch đang chờ
-// Chạy mỗi 5 phút
+// 1. THẺ CÀO (THESIEUTOC)
 // ============================================================
 
-async function checkPendingTransactions(): Promise<void> {
-    logger.info('[Scheduler] Đang kiểm tra các giao dịch chờ xử lý...');
+/**
+ * Kiểm tra các giao dịch thẻ đang chờ (Polling fallback)
+ * Chạy mỗi 5 phút
+ */
+async function checkPendingCards(): Promise<void> {
+    logger.info('[Scheduler] Đang quét các thẻ đang chờ xử lý...');
 
     try {
-        // Lấy các giao dịch đang chờ từ database
         const stmt = db.prepare(`
             SELECT trans_id, date
             FROM trans_log
@@ -51,7 +55,11 @@ async function checkPendingTransactions(): Promise<void> {
             date: string;
         }[];
 
-        logger.info(`[Scheduler] Tìm thấy ${pendingTxs.length} giao dịch đang chờ`);
+        if (pendingTxs.length > 0) {
+            logger.info(`[Scheduler] Tìm thấy ${pendingTxs.length} thẻ cần kiểm tra lại`);
+        } else {
+            logger.info('[Scheduler] Hiện không có thẻ nào đang chờ');
+        }
 
         let successCount = 0;
         let failedCount = 0;
@@ -59,53 +67,144 @@ async function checkPendingTransactions(): Promise<void> {
 
         for (const tx of pendingTxs) {
             try {
-                // Kiểm tra trạng thái với TheSieuToc API
                 const status = await checkCardStatus(tx.trans_id);
 
                 if (status.status === CHECK_STATUS.SUCCESS) {
-                    updateTransactionStatus(tx.trans_id, TransactionStatus.SUCCESS);
+                    updateTransactionStatus({
+                        idOrTransId: tx.trans_id,
+                        status: TransactionStatus.SUCCESS,
+                    });
                     successCount++;
-                    logger.info(`[Scheduler] Giao dịch ${tx.trans_id} -> THÀNH CÔNG`);
+                    logger.info(`[Scheduler] Thẻ ${tx.trans_id} -> THÀNH CÔNG`);
                 } else if (status.status === CHECK_STATUS.FAILED) {
-                    updateTransactionStatus(tx.trans_id, TransactionStatus.FAILED);
+                    updateTransactionStatus({
+                        idOrTransId: tx.trans_id,
+                        status: TransactionStatus.FAILED,
+                    });
                     failedCount++;
-                    logger.info(`[Scheduler] Giao dịch ${tx.trans_id} -> THẤT BẠI`);
+                    logger.info(`[Scheduler] Thẻ ${tx.trans_id} -> THẤT BẠI`);
                 } else if (status.status === CHECK_STATUS.WRONG_AMOUNT) {
-                    updateTransactionStatus(tx.trans_id, TransactionStatus.WRONG_AMOUNT);
+                    updateTransactionStatus({
+                        idOrTransId: tx.trans_id,
+                        status: TransactionStatus.WRONG_AMOUNT,
+                    });
                     failedCount++;
-                    logger.info(`[Scheduler] Giao dịch ${tx.trans_id} -> SAI MỆNH GIÁ`);
+                    logger.info(`[Scheduler] Thẻ ${tx.trans_id} -> SAI MỆNH GIÁ`);
                 } else {
                     stillPending++;
                 }
 
-                // Rate limit: chờ 500ms giữa các API calls
                 await new Promise((resolve) => setTimeout(resolve, 500));
             } catch (error) {
                 logger.error(`[Scheduler] Lỗi khi kiểm tra ${tx.trans_id}: ${error}`);
             }
         }
 
-        logger.info(
-            `[Scheduler] Hoàn tất: ${successCount} thành công, ` +
-                `${failedCount} thất bại, ${stillPending} vẫn đang chờ`
-        );
+        if (pendingTxs.length > 0) {
+            logger.info(
+                `[Scheduler] Kết quả quét: ${successCount} đúng, ${failedCount} lỗi, ${stillPending} vẫn đang xử lý`
+            );
+        }
+
+        // --- BỔ SUNG: Log thực tế từ DB ---
+        const todayStats = db
+            .prepare(
+                `
+            SELECT COUNT(*) as count 
+            FROM trans_log 
+            WHERE status IN (1, 3) AND date(date) = date('now', 'localtime')
+        `
+            )
+            .get() as { count: number };
+
+        logger.info(`[Scheduler] Tổng thẻ thành công hôm nay: ${todayStats.count}`);
     } catch (error) {
-        logger.error(`[Scheduler] Lỗi trong checkPendingTransactions: ${error}`);
+        logger.error(`[Scheduler] Lỗi trong checkPendingCards: ${error}`);
     }
 }
 
 // ============================================================
-// 2. Retry Callback thất bại
-// Chạy mỗi phút
+// 2. NGÂN HÀNG (PAYOS)
+// ============================================================
+
+/**
+ * Kiểm tra các giao dịch PayOS đang chờ (Polling fallback)
+ * Chạy mỗi 10 phút
+ */
+async function checkPendingPayOSOrders(): Promise<void> {
+    logger.info('[Scheduler] Đang quét các đơn hàng PayOS PENDING...');
+
+    try {
+        const pendingOrders = payOSService.getPendingPayOSOrders(15);
+
+        if (pendingOrders.length > 0) {
+            logger.info(`[Scheduler] Tìm thấy ${pendingOrders.length} đơn cần đồng bộ lại`);
+        } else {
+            logger.info('[Scheduler] Hiện tại không có đơn PayOS nào bị treo (>15 phút)');
+        }
+
+        for (const order of pendingOrders) {
+            try {
+                const paymentInfo = await payOSService.getPaymentLinkInformation(order.orderCode);
+
+                if (paymentInfo.status === 'PAID') {
+                    await payOSService.updatePaymentStatus(order.orderCode, 'SUCCESS', paymentInfo);
+                    logger.info(`[Scheduler] Đơn PayOS ${order.orderCode} -> THÀNH CÔNG (Sync)`);
+                } else if (paymentInfo.status === 'CANCELLED' || paymentInfo.status === 'EXPIRED') {
+                    await payOSService.updatePaymentStatus(
+                        order.orderCode,
+                        'CANCELLED',
+                        paymentInfo
+                    );
+                    logger.info(
+                        `[Scheduler] Đơn PayOS ${order.orderCode} -> ĐÃ HỦY/HẾT HẠN (Sync)`
+                    );
+                }
+            } catch (error) {
+                logger.error(`[Scheduler] Lỗi khi polling đơn ${order.orderCode}: ${error}`);
+            }
+        }
+
+        // --- BỔ SUNG: Log thực tế từ DB ---
+        const todayPayOS = db
+            .prepare(
+                `
+            SELECT COUNT(*) as count 
+            FROM payos_log 
+            WHERE status = 'SUCCESS' AND date(createdAt) = date('now', 'localtime')
+        `
+            )
+            .get() as { count: number };
+
+        logger.info(`[Scheduler] Tổng đơn PayOS thành công hôm nay: ${todayPayOS.count}`);
+    } catch (error) {
+        logger.error(`[Scheduler] Lỗi trong checkPendingPayOSOrders: ${error}`);
+    }
+}
+
+/**
+ * Tự động hủy đơn hàng PayOS hết hạn
+ * Chạy mỗi 30 phút
+ */
+async function autoExpirePayOSOrders(): Promise<void> {
+    try {
+        logger.info('[Scheduler] Đang dọn dẹp các đơn PayOS quá hạn...');
+        payOSService.cancelExpiredPayOSOrders(60);
+    } catch (error) {
+        logger.error(`[Scheduler] Lỗi trong autoExpirePayOSOrders: ${error}`);
+    }
+}
+
+// ============================================================
+// 3. CALLBACK RETRY & CLEANUP
 // ============================================================
 
 async function retryFailedCallbacks(): Promise<void> {
     try {
         const dueRetries = await getDueCallbackRetries();
-
         if (dueRetries.length === 0) return;
 
-        logger.info(`[Scheduler] Đang xử lý ${dueRetries.length} callback cần retry`);
+        logger.info(`[Scheduler] Đang retry ${dueRetries.length} callback thất bại...`);
 
         for (const job of dueRetries) {
             try {
@@ -115,7 +214,7 @@ async function retryFailedCallbacks(): Promise<void> {
                 });
 
                 if (response.status >= 200 && response.status < 300) {
-                    logger.info(`[Scheduler] Callback retry thành công: ${job.transactionId}`);
+                    logger.info(`[Scheduler] Retry thành công: ${job.transactionId}`);
                 } else {
                     throw new Error(`HTTP ${response.status}`);
                 }
@@ -125,291 +224,203 @@ async function retryFailedCallbacks(): Promise<void> {
             }
         }
     } catch (error) {
-        logger.error(`[Scheduler] Lỗi trong retryFailedCallbacks: ${error}`);
+        logger.error(`[Scheduler] Lỗi retryFailedCallbacks: ${error}`);
     }
 }
 
-// ============================================================
-// 3. Dọn dẹp dữ liệu cũ
-// Chạy hàng ngày lúc 3:00 sáng
-// ============================================================
-
-interface CleanupConfig {
-    transactionDays: number; // Số ngày giữ giao dịch
-    logDays: number; // Số ngày giữ log files
-    blacklistDays: number; // Số ngày giữ blacklist
-}
-
-const defaultCleanupConfig: CleanupConfig = {
-    transactionDays: 90, // 3 tháng
-    logDays: 30, // 1 tháng
-    blacklistDays: 180, // 6 tháng
-};
-
-async function cleanupOldData(config: CleanupConfig = defaultCleanupConfig): Promise<void> {
+async function cleanupOldData(): Promise<void> {
     logger.info('[Scheduler] Bắt đầu dọn dẹp dữ liệu cũ...');
-
     try {
-        // 1. Xóa giao dịch cũ
-        const txStmt = db.prepare(`
-            DELETE FROM trans_log
-            WHERE datetime(date) < datetime('now', '-' || ? || ' days', 'localtime')
+        // Xóa thẻ cào cũ (>90 ngày)
+        const txResult = db
+            .prepare(
+                `
+            DELETE FROM trans_log 
+            WHERE datetime(date) < datetime('now', '-90 days', 'localtime')
             AND status != ?
-        `);
-        const txResult = txStmt.run(config.transactionDays, TransactionStatus.PENDING);
-        if (txResult.changes > 0) {
-            logger.info(`[Cleanup] Đã xóa ${txResult.changes} giao dịch cũ`);
+        `
+            )
+            .run(TransactionStatus.PENDING);
+
+        // Xóa đơn PayOS cũ (>90 ngày)
+        const payosResult = db
+            .prepare(
+                `
+            DELETE FROM payos_log
+            WHERE datetime(createdAt) < datetime('now', '-90 days', 'localtime')
+            AND status != 'PENDING'
+        `
+            )
+            .run();
+
+        if (txResult.changes > 0 || payosResult.changes > 0) {
+            logger.info(
+                `[Scheduler] Đã dọn dẹp ${txResult.changes} thẻ và ${payosResult.changes} đơn PayOS.`
+            );
         }
 
-        // 2. Xóa blacklist cũ (nếu table tồn tại)
-        try {
-            const blStmt = db.prepare(`
-                DELETE FROM card_blacklist
-                WHERE datetime(created_at) < datetime('now', '-' || ? || ' days', 'localtime')
-            `);
-            const blResult = blStmt.run(config.blacklistDays);
-            if (blResult.changes > 0) {
-                logger.info(`[Cleanup] Đã xóa ${blResult.changes} blacklist cũ`);
-            }
-        } catch {
-            // Table có thể chưa tồn tại
-        }
+        // Dọn dẹp logs
+        await cleanupLogFiles(30);
 
-        // 3. Xóa log files cũ
-        await cleanupLogFiles(config.logDays);
-
-        // 4. Tối ưu database
         db.exec('VACUUM');
-        logger.info('[Cleanup] Đã tối ưu database');
-
-        logger.info('[Scheduler] Dọn dẹp hoàn tất');
+        logger.info('[Scheduler] Đã tối ưu database (VACUUM)');
     } catch (error) {
-        logger.error(`[Scheduler] Lỗi trong cleanupOldData: ${error}`);
+        logger.error(`[Scheduler] Lỗi dọn dẹp: ${error}`);
     }
 }
 
 async function cleanupLogFiles(daysToKeep: number): Promise<void> {
     const logsDir = path.join(process.cwd(), 'logs');
-
     if (!fs.existsSync(logsDir)) return;
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
     const files = fs.readdirSync(logsDir);
-    let deletedCount = 0;
+    const protectedFiles = ['cardsuccess.log', 'payossuccess.log'];
 
     for (const file of files) {
-        // Bỏ qua các file log quan trọng (không xóa)
-        // cardsuccess.log: Lưu tất cả thẻ nạp thành công - KHÔNG BAO GIỜ XÓA
-        // payossuccess.log: Lưu tất cả thanh toán PayOS thành công - KHÔNG BAO GIỜ XÓA
-        const protectedFiles = [
-            'combined.log',
-            'error.log',
-            'card.log',
-            'cardsuccess.log', // File này KHÔNG bị xóa
-            'payos.log',
-            'payossuccess.log', // File này KHÔNG bị xóa
-        ];
-        if (protectedFiles.includes(file)) {
-            continue;
-        }
-
+        if (protectedFiles.includes(file)) continue;
         const filePath = path.join(logsDir, file);
         const stats = fs.statSync(filePath);
-
         if (stats.mtime < cutoffDate) {
             fs.unlinkSync(filePath);
-            deletedCount++;
         }
-    }
-
-    if (deletedCount > 0) {
-        logger.info(`[Cleanup] Đã xóa ${deletedCount} file log cũ`);
     }
 }
 
 // ============================================================
-// 4. Bảo trì Database
-// Chạy hàng tuần vào Chủ nhật lúc 4:00 sáng
-// ============================================================
-
-async function databaseMaintenance(): Promise<void> {
-    logger.info('[Scheduler] Bắt đầu bảo trì database...');
-
-    try {
-        // Phân tích tables để tối ưu query
-        db.exec('ANALYZE');
-        logger.info('[Maintenance] Đã phân tích tables');
-
-        // Xây dựng lại indexes
-        db.exec('REINDEX');
-        logger.info('[Maintenance] Đã xây dựng lại indexes');
-
-        // Kiểm tra tính toàn vẹn
-        const integrityCheck = db.pragma('integrity_check') as { integrity_check: string }[];
-        if (integrityCheck[0]?.integrity_check === 'ok') {
-            logger.info('[Maintenance] Kiểm tra toàn vẹn database: OK');
-        } else {
-            logger.error(
-                `[Maintenance] Kiểm tra toàn vẹn thất bại: ${JSON.stringify(integrityCheck)}`
-            );
-        }
-
-        logger.info('[Scheduler] Bảo trì database hoàn tất');
-    } catch (error) {
-        logger.error(`[Scheduler] Lỗi trong databaseMaintenance: ${error}`);
-    }
-}
-
-// ============================================================
-// 5. Thống kê hàng ngày
-// Chạy mỗi ngày lúc 00:05
+// 4. THỐNG KÊ DOANH THU
 // ============================================================
 
 async function generateDailyStats(): Promise<void> {
-    logger.info('[Scheduler] Đang tạo thống kê hàng ngày...');
-
+    logger.info('[Scheduler] Đang tính toán doanh thu ngày hôm qua...');
     try {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const dateStr = yesterday.toISOString().split('T')[0];
 
-        const stats = db
+        const cardStats = db
             .prepare(
                 `
-            SELECT
-                COUNT(*) as total_transactions,
-                SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as success_count,
-                SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) as failed_count,
-                SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) as pending_count,
-                SUM(CASE WHEN status = 1 THEN amount ELSE 0 END) as total_success_amount,
-                type
-            FROM trans_log
-            WHERE date(date) = ?
-            GROUP BY type
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status IN (1, 3) THEN amount ELSE 0 END) as total_amount,
+                SUM(CASE WHEN status IN (1, 3) THEN net_amount ELSE 0 END) as total_net
+            FROM trans_log WHERE date(date) = ?
         `
             )
-            .all(dateStr) as {
-            total_transactions: number;
-            success_count: number;
-            failed_count: number;
-            pending_count: number;
-            total_success_amount: number;
-            type: string;
-        }[];
+            .get(dateStr) as { total: number; total_amount: number; total_net: number };
 
-        logger.info(`[Stats] Thống kê ngày ${dateStr}:`);
-        for (const stat of stats) {
-            logger.info(
-                `[Stats] - ${stat.type}: ${stat.success_count}/${stat.total_transactions} (${stat.total_success_amount.toLocaleString()}đ)`
-            );
-        }
+        const payosStats = db
+            .prepare(
+                `
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'SUCCESS' THEN amount ELSE 0 END) as total_amount
+            FROM payos_log WHERE date(createdAt) = ?
+        `
+            )
+            .get(dateStr) as { total: number; total_amount: number };
+
+        logger.info(`[Scheduler] --- BÁO CÁO DOANH THU ${dateStr} ---`);
+        logger.info(
+            `[Scheduler] 💳 Thẻ cào: ${(cardStats.total_amount || 0).toLocaleString()}đ (Thực nhận: ${(cardStats.total_net || 0).toLocaleString()}đ)`
+        );
+        logger.info(`[Scheduler] 🏦 Ngân hàng: ${(payosStats.total_amount || 0).toLocaleString()}đ`);
+        logger.info(
+            `[Scheduler] 💰 Tổng thực thu: ${(
+                (cardStats.total_net || 0) + (payosStats.total_amount || 0)
+            ).toLocaleString()}đ`
+        );
     } catch (error) {
-        logger.error(`[Scheduler] Lỗi trong generateDailyStats: ${error}`);
+        logger.error(`[Scheduler] Lỗi thống kê: ${error}`);
     }
 }
 
 // ============================================================
-// Quản lý Scheduler
+// QUẢN LÝ SCHEDULER
 // ============================================================
 
 export function startScheduler(): void {
-    logger.info('[Scheduler] Bắt đầu scheduler...');
+    logger.info('[Scheduler] Hệ thống tác vụ định kỳ đã khởi động');
 
-    // Kiểm tra giao dịch đang chờ - mỗi 5 phút
-    const pendingTask = cron.schedule('*/5 * * * *', checkPendingTransactions, {
-        timezone: 'Asia/Ho_Chi_Minh',
-    });
+    // Quét thẻ cào (5p)
     scheduledTasks.push({
-        name: 'checkPendingTransactions',
+        name: 'TheSieuToc_Polling',
         cronExpression: '*/5 * * * *',
-        task: pendingTask,
+        task: cron.schedule('*/5 * * * *', checkPendingCards, { timezone: 'Asia/Ho_Chi_Minh' }),
         enabled: true,
     });
 
-    // Retry callback thất bại - mỗi phút
-    const callbackTask = cron.schedule('* * * * *', retryFailedCallbacks, {
-        timezone: 'Asia/Ho_Chi_Minh',
-    });
+    // Quét ngân hàng (10p)
     scheduledTasks.push({
-        name: 'retryFailedCallbacks',
+        name: 'PayOS_Polling',
+        cronExpression: '*/10 * * * *',
+        task: cron.schedule('*/10 * * * *', checkPendingPayOSOrders, {
+            timezone: 'Asia/Ho_Chi_Minh',
+        }),
+        enabled: true,
+    });
+
+    // Hủy đơn hết hạn (30p)
+    scheduledTasks.push({
+        name: 'PayOS_Cleanup',
+        cronExpression: '*/30 * * * *',
+        task: cron.schedule('*/30 * * * *', autoExpirePayOSOrders, {
+            timezone: 'Asia/Ho_Chi_Minh',
+        }),
+        enabled: true,
+    });
+
+    // Retry callbacks (mỗi phút)
+    scheduledTasks.push({
+        name: 'Callback_Retry',
         cronExpression: '* * * * *',
-        task: callbackTask,
+        task: cron.schedule('* * * * *', retryFailedCallbacks, { timezone: 'Asia/Ho_Chi_Minh' }),
         enabled: true,
     });
 
-    // Dọn dẹp dữ liệu cũ - hàng ngày lúc 3:00 AM
-    const cleanupTask = cron.schedule('0 3 * * *', () => cleanupOldData(), {
-        timezone: 'Asia/Ho_Chi_Minh',
-    });
+    // Thống kê & Dọn dẹp (Hàng ngày)
     scheduledTasks.push({
-        name: 'cleanupOldData',
-        cronExpression: '0 3 * * *',
-        task: cleanupTask,
-        enabled: true,
-    });
-
-    // Bảo trì database - Chủ nhật lúc 4:00 AM
-    const maintenanceTask = cron.schedule('0 4 * * 0', databaseMaintenance, {
-        timezone: 'Asia/Ho_Chi_Minh',
-    });
-    scheduledTasks.push({
-        name: 'databaseMaintenance',
-        cronExpression: '0 4 * * 0',
-        task: maintenanceTask,
-        enabled: true,
-    });
-
-    // Thống kê hàng ngày - mỗi ngày lúc 00:05
-    const statsTask = cron.schedule('5 0 * * *', generateDailyStats, {
-        timezone: 'Asia/Ho_Chi_Minh',
-    });
-    scheduledTasks.push({
-        name: 'generateDailyStats',
+        name: 'Daily_Stats',
         cronExpression: '5 0 * * *',
-        task: statsTask,
+        task: cron.schedule('5 0 * * *', generateDailyStats, { timezone: 'Asia/Ho_Chi_Minh' }),
         enabled: true,
     });
 
-    logger.info(`[Scheduler] Đã khởi động ${scheduledTasks.length} tác vụ định kỳ`);
+    scheduledTasks.push({
+        name: 'Daily_Cleanup',
+        cronExpression: '0 3 * * *',
+        task: cron.schedule('0 3 * * *', cleanupOldData, { timezone: 'Asia/Ho_Chi_Minh' }),
+        enabled: true,
+    });
 }
 
 export function stopScheduler(): void {
     for (const task of scheduledTasks) {
-        if (task.task) {
-            task.task.stop();
-            task.enabled = false;
-        }
+        if (task.task) task.task.stop();
     }
     scheduledTasks.length = 0;
-    logger.info('[Scheduler] Đã dừng scheduler');
+    logger.info('[Scheduler] Đã dừng toàn bộ tác vụ');
 }
 
-export function getSchedulerStatus(): Array<{
-    name: string;
-    cronExpression: string;
-    enabled: boolean;
-}> {
+export async function triggerPendingCheck(): Promise<void> {
+    await checkPendingCards();
+    await checkPendingPayOSOrders();
+}
+
+export async function triggerDailyStats(): Promise<void> {
+    await generateDailyStats();
+}
+
+/**
+ * Lấy danh sách trạng thái các tác vụ đang chạy
+ */
+export function getSchedulerStatus() {
     return scheduledTasks.map((t) => ({
         name: t.name,
         cronExpression: t.cronExpression,
         enabled: t.enabled,
     }));
-}
-
-// ============================================================
-// Hàm trigger thủ công (cho testing hoặc admin)
-// ============================================================
-
-export async function triggerPendingCheck(): Promise<void> {
-    await checkPendingTransactions();
-}
-
-export async function triggerCleanup(config?: CleanupConfig): Promise<void> {
-    await cleanupOldData(config);
-}
-
-export async function triggerDailyStats(): Promise<void> {
-    await generateDailyStats();
 }

@@ -78,12 +78,20 @@ export function theSieuTocCallbackHandler(req: Request, res: Response<ApiRespons
         // Update transaction status based on callback
         let newStatus: TransactionStatus;
         const actualAmount: number = parseInt(data.amount);
+        const netAmount: number = data.real_amount ? parseInt(data.real_amount as string) : 0;
+        const callbackRaw: string = JSON.stringify(req.body);
 
         switch (data.status) {
             case CALLBACK_STATUS.SUCCESS:
                 // Thẻ đúng - thành công
                 newStatus = TransactionStatus.SUCCESS;
-                updateTransactionStatus(transaction.id, newStatus);
+                updateTransactionStatus({
+                    idOrTransId: transaction.id,
+                    status: newStatus,
+                    actualAmount,
+                    netAmount,
+                    callbackRaw,
+                });
                 logger.info(
                     `[TheSieuToc Callback] THÀNH CÔNG: ${data.content}, Mệnh giá: ${data.amount}đ, Thực nhận: ${data.real_amount}đ`
                 );
@@ -106,7 +114,13 @@ export function theSieuTocCallbackHandler(req: Request, res: Response<ApiRespons
             case CALLBACK_STATUS.WRONG_AMOUNT:
                 // Thẻ sai mệnh giá - cập nhật mệnh giá thật
                 newStatus = TransactionStatus.WRONG_AMOUNT;
-                updateTransactionStatus(transaction.id, newStatus, actualAmount);
+                updateTransactionStatus({
+                    idOrTransId: transaction.id,
+                    status: newStatus,
+                    actualAmount,
+                    netAmount,
+                    callbackRaw,
+                });
                 logger.info(
                     `[TheSieuToc Callback] SAI MỆNH GIÁ: ${data.content}, Khai: ${transaction.amount}đ, Thực: ${actualAmount}đ`
                 );
@@ -130,7 +144,12 @@ export function theSieuTocCallbackHandler(req: Request, res: Response<ApiRespons
             default:
                 // Thẻ sai - thất bại
                 newStatus = TransactionStatus.FAILED;
-                updateTransactionStatus(transaction.id, newStatus);
+                updateTransactionStatus({
+                    idOrTransId: transaction.id,
+                    status: newStatus,
+                    actualAmount,
+                    callbackRaw,
+                });
                 logger.info(`[TheSieuToc Callback] THẤT BẠI: ${data.content}`);
                 break;
         }
@@ -210,7 +229,7 @@ export async function payOSWebhookHandler(req: Request, res: Response): Promise<
         const result = payOSService.processWebhookResult(webhookBody);
 
         // 3. Update database
-        payOSService.updatePaymentStatus(
+        await payOSService.updatePaymentStatus(
             result.orderCode,
             result.status,
             verifiedData as unknown as PayOSPaymentData

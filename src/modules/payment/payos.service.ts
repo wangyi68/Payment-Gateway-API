@@ -2,6 +2,7 @@ import { PayOS } from '@payos/node';
 import { config } from '../../config/index.js';
 import { db } from '../../database/index.js';
 import { logger } from '../../common/utils/logger.js';
+import { getBankName } from '../../common/utils/bank-helper.js';
 import {
     PayOSSignatureError,
     PayOSPaymentLinkError,
@@ -98,8 +99,8 @@ export class PayOSService {
 
             // Save to DB
             const stmt = db.prepare(`
-                INSERT INTO payos_log(orderCode, amount, description, status, checkoutUrl, createdAt)
-                VALUES(?, ?, ?, 'PENDING', ?, datetime('now'))
+                INSERT INTO payos_log(orderCode, amount, description, status, checkoutUrl, createdAt, updatedAt)
+                VALUES(?, ?, ?, 'PENDING', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
             `);
             stmt.run(orderCode, amount, description, paymentLinkResponse.checkoutUrl);
 
@@ -155,24 +156,39 @@ export class PayOSService {
         }
     }
 
-    updatePaymentStatus(
+    async updatePaymentStatus(
         orderCode: number,
         status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'CANCELLED',
         transactionData?: Partial<PayOSPaymentData>
     ) {
+        let paymentMethod = transactionData?.counterAccountBankName || null;
+
+        // Nếu không có tên ngân hàng nhưng có ID (BIN)
+        if (!paymentMethod && transactionData?.counterAccountBankId) {
+            paymentMethod = await getBankName(transactionData.counterAccountBankId);
+        }
+
         const stmt = db.prepare(`
             UPDATE payos_log 
             SET status = ?,
                 reference = ?,
+                payment_method = ?,
+                counter_account_name = ?,
+                counter_account_number = ?,
                 transactionDateTime = ?,
-                updatedAt = datetime('now')
+                canceledAt = ?,
+                updatedAt = datetime('now', 'localtime')
             WHERE orderCode = ?
         `);
 
         stmt.run(
             status,
             transactionData?.reference || null,
+            paymentMethod,
+            transactionData?.counterAccountName || null,
+            transactionData?.counterAccountNumber || null,
             transactionData?.transactionDateTime || null,
+            status === 'CANCELLED' ? new Date().toLocaleString('sv-SE') : null, // ISO-like local format
             orderCode
         );
 
@@ -181,6 +197,45 @@ export class PayOSService {
 
     getOrderFromDB(orderCode: number) {
         return db.prepare('SELECT * FROM payos_log WHERE orderCode = ?').get(orderCode);
+    }
+
+    /**
+     * Lấy danh sách các đơn hàng PayOS đang chờ xử lý
+     * @param minutesAgo Số phút tối thiểu từ khi tạo (ví dụ: đã chờ quá 15 phút)
+     */
+    getPendingPayOSOrders(minutesAgo: number = 15) {
+        return db
+            .prepare(
+                `
+            SELECT orderCode, status
+            FROM payos_log
+            WHERE status = 'PENDING'
+            AND datetime(createdAt) < datetime('now', '-' || ? || ' minutes', 'localtime')
+            AND datetime(createdAt) > datetime('now', '-24 hours', 'localtime')
+        `
+            )
+            .all(minutesAgo) as { orderCode: number; status: string }[];
+    }
+
+    /**
+     * Tự động hủy các đơn hàng đã quá hạn thanh toán (ví dụ: quá 60 phút)
+     */
+    cancelExpiredPayOSOrders(expiryMinutes: number = 60) {
+        const stmt = db.prepare(`
+            UPDATE payos_log
+            SET status = 'CANCELLED',
+                canceledAt = datetime('now', 'localtime'),
+                updatedAt = datetime('now', 'localtime')
+            WHERE status = 'PENDING'
+            AND datetime(createdAt) < datetime('now', '-' || ? || ' minutes', 'localtime')
+        `);
+        const result = stmt.run(expiryMinutes);
+        if (result.changes > 0) {
+            logger.info(
+                `[PayOS] Đã tự động hủy ${result.changes} đơn hàng quá hạn (${expiryMinutes} phút)`
+            );
+        }
+        return result.changes;
     }
 
     processWebhookResult(webhookBody: PayOSWebhookPayload): {

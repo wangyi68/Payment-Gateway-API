@@ -11,20 +11,28 @@ export function createTransaction(data: {
     pin: string;
     seri: string;
     type: string;
+    ip_address?: string;
+    user_agent?: string;
 }): number {
     const stmt = db.prepare(`
-    INSERT INTO trans_log (name, trans_id, amount, pin, seri, type, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO trans_log (
+        name, trans_id, amount, declared_amount, pin, seri, type, 
+        status, ip_address, user_agent
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
     const result = stmt.run(
         data.name,
         data.trans_id,
         data.amount,
+        data.amount, // declared_amount is initially same as amount
         data.pin,
         data.seri,
         data.type,
-        TransactionStatus.PENDING
+        TransactionStatus.PENDING,
+        data.ip_address || null,
+        data.user_agent || null
     );
 
     logger.info(`Đã tạo giao dịch: ${data.trans_id} cho user: ${data.name}`);
@@ -53,43 +61,44 @@ export function findPendingTransaction(
 /**
  * Update transaction status by ID
  */
-export function updateTransactionStatus(
-    id: number,
-    status: TransactionStatus,
-    amount?: number
-): void;
-/**
- * Update transaction status by trans_id
- */
-export function updateTransactionStatus(
-    transId: string,
-    status: TransactionStatus,
-    amount?: number
-): void;
-export function updateTransactionStatus(
-    idOrTransId: number | string,
-    status: TransactionStatus,
-    amount?: number
-): void {
-    const isById = typeof idOrTransId === 'number';
+export function updateTransactionStatus(params: {
+    idOrTransId: number | string;
+    status: TransactionStatus;
+    actualAmount?: number;
+    netAmount?: number;
+    callbackRaw?: string;
+    discountRate?: number;
+}): void {
+    const isById = typeof params.idOrTransId === 'number';
+    const whereClause = isById ? 'WHERE id = ?' : 'WHERE trans_id = ?';
 
-    if (amount !== undefined) {
-        const stmt = db.prepare(
-            isById
-                ? `UPDATE trans_log SET status = ?, amount = ? WHERE id = ?`
-                : `UPDATE trans_log SET status = ?, amount = ? WHERE trans_id = ?`
-        );
-        stmt.run(status, amount, idOrTransId);
-    } else {
-        const stmt = db.prepare(
-            isById
-                ? `UPDATE trans_log SET status = ? WHERE id = ?`
-                : `UPDATE trans_log SET status = ? WHERE trans_id = ?`
-        );
-        stmt.run(status, idOrTransId);
+    const updates: string[] = ['status = ?'];
+    const values: (string | number | TransactionStatus)[] = [params.status];
+
+    if (params.actualAmount !== undefined) {
+        updates.push('actual_amount = ?');
+        values.push(params.actualAmount);
+    }
+    if (params.netAmount !== undefined) {
+        updates.push('net_amount = ?');
+        values.push(params.netAmount);
+    }
+    if (params.callbackRaw !== undefined) {
+        updates.push('callback_raw = ?');
+        values.push(params.callbackRaw);
+    }
+    if (params.discountRate !== undefined) {
+        updates.push('discount_rate = ?');
+        values.push(params.discountRate);
     }
 
-    logger.info(`Đã cập nhật giao dịch ${idOrTransId} sang trạng thái ${status}`);
+    const query = `UPDATE trans_log SET ${updates.join(', ')} ${whereClause}`;
+    values.push(params.idOrTransId);
+
+    const stmt = db.prepare(query);
+    stmt.run(...values);
+
+    logger.info(`Đã cập nhật giao dịch ${params.idOrTransId} sang trạng thái ${params.status}`);
 }
 
 /**

@@ -507,7 +507,7 @@ export async function readinessHandler(_req: Request, res: Response): Promise<vo
                 },
             });
         }
-    } catch (error) {
+    } catch {
         res.status(503).json({
             status: 'not ready',
             error: 'Health check failed',

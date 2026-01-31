@@ -19,17 +19,25 @@ db.pragma('journal_mode = WAL');
 export function initializeDatabase(): void {
     logger.info('Đang khởi tạo database...');
 
-    // Create trans_log table
+    // Create trans_log table (Card Top-up)
     db.exec(`
     CREATE TABLE IF NOT EXISTS trans_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       amount INTEGER NOT NULL,
+      declared_amount INTEGER DEFAULT 0,
+      actual_amount INTEGER DEFAULT 0,
+      discount_rate REAL DEFAULT 0,
+      net_amount INTEGER DEFAULT 0,
       seri TEXT NOT NULL,
       pin TEXT NOT NULL,
       type TEXT NOT NULL,
       status INTEGER NOT NULL DEFAULT 0,
       trans_id TEXT NOT NULL,
+      request_id TEXT,
+      callback_raw TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
       date TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
     )
   `);
@@ -41,9 +49,7 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_trans_log_date ON trans_log(date);
   `);
 
-    logger.info('Database đã khởi tạo thành công');
-
-    // Create payos_log table
+    // Create payos_log table (Bank/QR)
     db.exec(`
     CREATE TABLE IF NOT EXISTS payos_log (
       orderCode INTEGER PRIMARY KEY,
@@ -52,27 +58,60 @@ export function initializeDatabase(): void {
       status TEXT DEFAULT 'PENDING',
       checkoutUrl TEXT,
       reference TEXT,
+      payment_method TEXT,
+      counter_account_name TEXT,
+      counter_account_number TEXT,
       transactionDateTime TEXT,
+      canceledAt TEXT,
       createdAt TEXT DEFAULT (datetime('now', 'localtime')),
       updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
     )
   `);
 
-    // Add missing columns for existing tables (migration)
-    const payosColumns = db.prepare('PRAGMA table_info(payos_log)').all() as { name: string }[];
-    const existingColumns = payosColumns.map((c) => c.name);
+    // --- Migration Logic ---
 
-    if (!existingColumns.includes('reference')) {
-        db.exec('ALTER TABLE payos_log ADD COLUMN reference TEXT');
-    }
-    if (!existingColumns.includes('transactionDateTime')) {
-        db.exec('ALTER TABLE payos_log ADD COLUMN transactionDateTime TEXT');
-    }
-    if (!existingColumns.includes('updatedAt')) {
-        db.exec(
-            "ALTER TABLE payos_log ADD COLUMN updatedAt TEXT DEFAULT (datetime('now', 'localtime'))"
-        );
-    }
+    // 1. Migrate trans_log
+    const transColumns = db.prepare('PRAGMA table_info(trans_log)').all() as { name: string }[];
+    const transExisting = transColumns.map((c) => c.name);
+
+    const newTransCols = [
+        ['declared_amount', 'INTEGER DEFAULT 0'],
+        ['actual_amount', 'INTEGER DEFAULT 0'],
+        ['discount_rate', 'REAL DEFAULT 0'],
+        ['net_amount', 'INTEGER DEFAULT 0'],
+        ['request_id', 'TEXT'],
+        ['callback_raw', 'TEXT'],
+        ['ip_address', 'TEXT'],
+        ['user_agent', 'TEXT'],
+    ];
+
+    newTransCols.forEach(([col, type]) => {
+        if (!transExisting.includes(col as string)) {
+            db.exec(`ALTER TABLE trans_log ADD COLUMN ${col} ${type}`);
+        }
+    });
+
+    // 2. Migrate payos_log
+    const payosColumns = db.prepare('PRAGMA table_info(payos_log)').all() as { name: string }[];
+    const payosExisting = payosColumns.map((c) => c.name);
+
+    const newPayosCols = [
+        ['reference', 'TEXT'],
+        ['payment_method', 'TEXT'],
+        ['counter_account_name', 'TEXT'],
+        ['counter_account_number', 'TEXT'],
+        ['transactionDateTime', 'TEXT'],
+        ['canceledAt', 'TEXT'],
+        ['updatedAt', "TEXT DEFAULT (datetime('now', 'localtime'))"],
+    ];
+
+    newPayosCols.forEach(([col, type]) => {
+        if (!payosExisting.includes(col as string)) {
+            db.exec(`ALTER TABLE payos_log ADD COLUMN ${col} ${type}`);
+        }
+    });
+
+    logger.info('Database đã khởi tạo và cập nhật thành công');
 }
 
 // Transaction status enum
@@ -87,11 +126,19 @@ export interface Transaction {
     id: number;
     name: string;
     amount: number;
+    declared_amount?: number;
+    actual_amount?: number;
+    discount_rate?: number;
+    net_amount?: number;
     seri: string;
     pin: string;
     type: string;
     status: TransactionStatus;
     trans_id: string;
+    request_id?: string;
+    callback_raw?: string;
+    ip_address?: string;
+    user_agent?: string;
     date: string;
 }
 
@@ -102,7 +149,11 @@ export interface PayOSTransaction {
     status: string;
     checkoutUrl: string;
     reference?: string;
+    payment_method?: string;
+    counter_account_name?: string;
+    counter_account_number?: string;
     transactionDateTime?: string;
+    canceledAt?: string;
     createdAt: string;
     updatedAt?: string;
 }

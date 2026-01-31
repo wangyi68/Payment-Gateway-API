@@ -27,7 +27,7 @@ export async function getSystemInfoHandler(
         try {
             const result = db.prepare('SELECT 1').get();
             dbStatus = result ? 'connected' : 'error';
-        } catch (e) {
+        } catch {
             dbStatus = 'error';
         }
 

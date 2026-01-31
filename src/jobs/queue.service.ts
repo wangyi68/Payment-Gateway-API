@@ -96,10 +96,12 @@ interface QueueJob<T = unknown> {
 const memoryQueues: Map<string, QueueJob[]> = new Map();
 
 function getMemoryQueue(key: string): QueueJob[] {
-    if (!memoryQueues.has(key)) {
-        memoryQueues.set(key, []);
+    let queue = memoryQueues.get(key);
+    if (!queue) {
+        queue = [];
+        memoryQueues.set(key, queue);
     }
-    return memoryQueues.get(key)!;
+    return queue;
 }
 
 // ============================================================
