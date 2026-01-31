@@ -1,5 +1,5 @@
 import winston from 'winston';
-import { config } from '../config/index.js';
+import { config } from '../../config/index.js';
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
@@ -39,10 +39,10 @@ export const logger = winston.createLogger({
         }),
         new winston.transports.File({
             filename: 'logs/error.log',
-            level: 'error'
+            level: 'error',
         }),
         new winston.transports.File({
-            filename: 'logs/combined.log'
+            filename: 'logs/combined.log',
         }),
     ],
 });
@@ -54,9 +54,7 @@ export const cardLogger = winston.createLogger({
         timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         printf(({ message, timestamp }) => `${timestamp} - ${message}`)
     ),
-    transports: [
-        new winston.transports.File({ filename: 'logs/card.log' }),
-    ],
+    transports: [new winston.transports.File({ filename: 'logs/card.log' })],
 });
 
 // Card Success Logger - Chỉ ghi thẻ nạp thành công
@@ -99,9 +97,87 @@ export function logSuccessCard(data: {
         `MỆNH GIÁ THỰC: ${data.actualAmount.toLocaleString()}đ`,
         `SỐ TIỀN NHẬN: ${data.realAmount}đ`,
         `MÃ GD: ${data.transactionId}`,
-        `TRẠNG THÁI: ${data.callbackStatus === 'thanhcong' ? 'THÀNH CÔNG' : 'SAI MỆNH GIÁ'}`
+        `TRẠNG THÁI: ${data.callbackStatus === 'thanhcong' ? 'THÀNH CÔNG' : 'SAI MỆNH GIÁ'}`,
     ].join(' | ');
 
     cardSuccessLogger.info(logEntry);
 }
 
+// ============================================================
+// PayOS Loggers
+// ============================================================
+
+// PayOS transaction logger (tất cả giao dịch PayOS)
+export const payosLogger = winston.createLogger({
+    level: 'info',
+    format: combine(
+        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        printf(({ message, timestamp }) => `${timestamp} - ${message}`)
+    ),
+    transports: [new winston.transports.File({ filename: 'logs/payos.log' })],
+});
+
+// PayOS Success Logger - Chỉ ghi thanh toán thành công
+// File này KHÔNG bị xóa trong cleanup
+export const payosSuccessLogger = winston.createLogger({
+    level: 'info',
+    format: combine(
+        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        printf(({ message, timestamp }) => `${timestamp} | ${message}`)
+    ),
+    transports: [
+        new winston.transports.File({
+            filename: 'logs/payossuccess.log',
+        }),
+    ],
+});
+
+/**
+ * Ghi log thanh toán PayOS thành công
+ */
+export function logSuccessPayment(data: {
+    orderCode: number;
+    amount: number;
+    description?: string;
+    reference?: string;
+    transactionDateTime?: string;
+    status: string;
+}): void {
+    const logEntry = [
+        `ORDER: ${data.orderCode}`,
+        `SỐ TIỀN: ${data.amount.toLocaleString()}đ`,
+        `MÔ TẢ: ${data.description || 'N/A'}`,
+        `REFERENCE: ${data.reference || 'N/A'}`,
+        `THỜI GIAN: ${data.transactionDateTime || 'N/A'}`,
+        `TRẠNG THÁI: ${data.status}`,
+    ].join(' | ');
+
+    payosSuccessLogger.info(logEntry);
+}
+
+/**
+ * Ghi log webhook PayOS
+ */
+export function logPayOSWebhook(
+    type: 'PAYMENT' | 'PAYOUT',
+    data: {
+        orderCode?: number;
+        code: string;
+        desc: string;
+        success: boolean;
+        amount?: number;
+    }
+): void {
+    const logEntry = [
+        `[${type}]`,
+        data.orderCode ? `ORDER: ${data.orderCode}` : '',
+        `CODE: ${data.code}`,
+        `DESC: ${data.desc}`,
+        `SUCCESS: ${data.success}`,
+        data.amount ? `AMOUNT: ${data.amount.toLocaleString()}đ` : '',
+    ]
+        .filter(Boolean)
+        .join(' | ');
+
+    payosLogger.info(logEntry);
+}

@@ -7,8 +7,8 @@
 
 import Redis from 'ioredis';
 import { config } from '../config/index.js';
-import { logger } from '../utils/logger.js';
-import type { SubmitCardRequest } from '../types/index.js';
+import { logger } from '../common/utils/logger.js';
+import type { SubmitCardRequest } from '../common/types/index.js';
 
 // ============================================================
 // Kết nối Redis
@@ -167,7 +167,7 @@ export async function getBatchJobStatus(jobId: string): Promise<BatchCardJob | n
         return data ? JSON.parse(data) : null;
     } else {
         const queue = getMemoryQueue(QUEUE_KEYS.CARD_BATCH);
-        const job = queue.find(j => j.id === jobId);
+        const job = queue.find((j) => j.id === jobId);
         return job ? (job.data as BatchCardJob) : null;
     }
 }
@@ -202,7 +202,7 @@ export async function updateBatchJobStatus(
         }
     } else {
         const queue = getMemoryQueue(QUEUE_KEYS.CARD_BATCH);
-        const jobWrapper = queue.find(j => j.id === jobId);
+        const jobWrapper = queue.find((j) => j.id === jobId);
         if (jobWrapper) {
             Object.assign(jobWrapper.data as BatchCardJob, updates);
         }
@@ -274,11 +274,7 @@ export async function getDueCallbackRetries(): Promise<CallbackRetryJob[]> {
     const retries: CallbackRetryJob[] = [];
 
     if (isRedisAvailable() && redis) {
-        const jobs = await redis.zrangebyscore(
-            QUEUE_KEYS.CALLBACK_RETRY,
-            0,
-            now
-        );
+        const jobs = await redis.zrangebyscore(QUEUE_KEYS.CALLBACK_RETRY, 0, now);
         for (const jobStr of jobs) {
             retries.push(JSON.parse(jobStr));
         }
@@ -288,7 +284,7 @@ export async function getDueCallbackRetries(): Promise<CallbackRetryJob[]> {
         }
     } else {
         const queue = getMemoryQueue(QUEUE_KEYS.CALLBACK_RETRY);
-        const dueJobs = queue.filter(j => {
+        const dueJobs = queue.filter((j) => {
             const job = j.data as CallbackRetryJob;
             return new Date(job.nextRetry).getTime() <= now;
         });
@@ -305,10 +301,7 @@ export async function getDueCallbackRetries(): Promise<CallbackRetryJob[]> {
 /**
  * Lên lịch lại callback retry với exponential backoff
  */
-export async function rescheduleCallbackRetry(
-    job: CallbackRetryJob,
-    error: string
-): Promise<void> {
+export async function rescheduleCallbackRetry(job: CallbackRetryJob, error: string): Promise<void> {
     job.attempts++;
     job.error = error;
 
@@ -326,7 +319,9 @@ export async function rescheduleCallbackRetry(
                 createdAt: new Date(),
             });
         }
-        logger.error(`[Queue] Callback ${job.transactionId} thất bại sau ${job.maxAttempts} lần thử`);
+        logger.error(
+            `[Queue] Callback ${job.transactionId} thất bại sau ${job.maxAttempts} lần thử`
+        );
         return;
     }
 
@@ -335,11 +330,7 @@ export async function rescheduleCallbackRetry(
     job.nextRetry = new Date(Date.now() + delay).toISOString();
 
     if (isRedisAvailable() && redis) {
-        await redis.zadd(
-            QUEUE_KEYS.CALLBACK_RETRY,
-            Date.now() + delay,
-            JSON.stringify(job)
-        );
+        await redis.zadd(QUEUE_KEYS.CALLBACK_RETRY, Date.now() + delay, JSON.stringify(job));
     } else {
         const queue = getMemoryQueue(QUEUE_KEYS.CALLBACK_RETRY);
         queue.push({
@@ -351,7 +342,9 @@ export async function rescheduleCallbackRetry(
         });
     }
 
-    logger.warn(`[Queue] Callback ${job.transactionId} đã lên lịch lại (lần ${job.attempts}/${job.maxAttempts})`);
+    logger.warn(
+        `[Queue] Callback ${job.transactionId} đã lên lịch lại (lần ${job.attempts}/${job.maxAttempts})`
+    );
 }
 
 // ============================================================
@@ -427,7 +420,7 @@ export async function updatePendingCheck(
         }
     } else {
         const queue = getMemoryQueue(QUEUE_KEYS.PENDING_CHECK);
-        const jobWrapper = queue.find(j => j.id === transactionId);
+        const jobWrapper = queue.find((j) => j.id === transactionId);
         if (jobWrapper) {
             Object.assign(jobWrapper.data as PendingCheckJob, updates);
         }
@@ -442,7 +435,7 @@ export async function removePendingCheck(transactionId: string): Promise<void> {
         await redis.hdel(QUEUE_KEYS.PENDING_CHECK, transactionId);
     } else {
         const queue = getMemoryQueue(QUEUE_KEYS.PENDING_CHECK);
-        const idx = queue.findIndex(j => j.id === transactionId);
+        const idx = queue.findIndex((j) => j.id === transactionId);
         if (idx > -1) queue.splice(idx, 1);
     }
 }

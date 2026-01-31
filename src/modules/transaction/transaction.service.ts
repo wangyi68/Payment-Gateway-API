@@ -1,5 +1,5 @@
-import { db, TransactionStatus, type Transaction } from '../database/index.js';
-import { logger } from '../utils/logger.js';
+import { db, TransactionStatus, type Transaction } from '../../database/index.js';
+import { logger } from '../../common/utils/logger.js';
 
 /**
  * Create a new transaction record
@@ -45,13 +45,9 @@ export function findPendingTransaction(
     WHERE status = ? AND trans_id = ? AND pin = ? AND seri = ? AND type = ?
   `);
 
-    return stmt.get(
-        TransactionStatus.PENDING,
-        transId,
-        pin,
-        serial,
-        cardType
-    ) as Transaction | undefined;
+    return stmt.get(TransactionStatus.PENDING, transId, pin, serial, cardType) as
+        | Transaction
+        | undefined;
 }
 
 /**
@@ -123,7 +119,6 @@ export function getTransactionByTransId(transId: string): Transaction | undefine
     return stmt.get(transId) as Transaction | undefined;
 }
 
-
 /**
  * Search transactions
  */
@@ -189,4 +184,3 @@ export function getStatusText(status: TransactionStatus): string {
             return 'Chờ Duyệt';
     }
 }
-

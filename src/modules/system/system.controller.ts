@@ -1,16 +1,16 @@
 import { Request, Response } from 'express';
 import os from 'os';
-import { getQueueStats } from '../services/queue.service.js';
-import { db } from '../database/index.js';
-import { ApiResponse } from '../types/index.js';
-import { logger } from '../utils/logger.js';
+import { getQueueStats } from '../../jobs/queue.service.js';
+import { db } from '../../database/index.js';
+import { ApiResponse } from '../../common/types/index.js';
+import { logger } from '../../common/utils/logger.js';
 
 /**
  * Get system information
  * GET /system/info
  */
 export async function getSystemInfoHandler(
-    req: Request,
+    _req: Request,
     res: Response<ApiResponse>
 ): Promise<void> {
     try {
@@ -42,30 +42,30 @@ export async function getSystemInfoHandler(
                         total: formatBytes(totalMem),
                         used: formatBytes(usedMem),
                         free: formatBytes(freeMem),
-                        percent_used: Math.round((usedMem / totalMem) * 100) + '%'
+                        percent_used: Math.round((usedMem / totalMem) * 100) + '%',
                     },
                     load_avg: os.loadavg(),
                     platform: os.platform(),
                     arch: os.arch(),
-                    node_version: process.version
+                    node_version: process.version,
                 },
                 services: {
                     database: dbStatus,
-                    redis: queueStats.redisConnected ? 'connected' : 'disconnected'
+                    redis: queueStats.redisConnected ? 'connected' : 'disconnected',
                 },
                 queues: {
                     batch: queueStats.batchQueue,
                     callback_retry: queueStats.callbackRetryQueue,
                     pending_check: queueStats.pendingCheckQueue,
-                    failed: queueStats.failedJobs
-                }
-            }
+                    failed: queueStats.failedJobs,
+                },
+            },
         });
     } catch (error) {
         logger.error('[System Info] Error:', error);
         res.status(500).json({
             success: false,
-            message: 'Không thể lấy thông tin hệ thống'
+            message: 'Không thể lấy thông tin hệ thống',
         });
     }
 }

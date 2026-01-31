@@ -7,6 +7,13 @@ const envSchema = z.object({
     // TheSieuToc API
     THESIEUTOC_API_KEY: z.string().min(1, 'API key is required'),
 
+    // PayOS
+    PAYOS_CLIENT_ID: z.string().min(1, 'PayOS Client ID is required'),
+    PAYOS_API_KEY: z.string().min(1, 'PayOS API Key is required'),
+    PAYOS_CHECKSUM_KEY: z.string().min(1, 'PayOS Checksum Key is required'),
+
+
+
     // Server
     PORT: z.string().default('3000').transform(Number),
     HOST: z.string().default('localhost'),
@@ -25,7 +32,10 @@ const envSchema = z.object({
     REDIS_PASSWORD: z.string().optional(),
 
     // Scheduler
-    SCHEDULER_ENABLED: z.string().default('true').transform(v => v === 'true'),
+    SCHEDULER_ENABLED: z
+        .string()
+        .default('true')
+        .transform((v) => v === 'true'),
 
     // Cleanup
     CLEANUP_TRANSACTION_DAYS: z.string().default('90').transform(Number),
@@ -56,6 +66,12 @@ export const config = {
             cardInfo: '/card_info.php',
         },
     },
+    payos: {
+        clientId: parsed.data.PAYOS_CLIENT_ID,
+        apiKey: parsed.data.PAYOS_API_KEY,
+        checksumKey: parsed.data.PAYOS_CHECKSUM_KEY,
+    },
+
     server: {
         port: parsed.data.PORT,
         host: parsed.data.HOST,
@@ -70,11 +86,13 @@ export const config = {
         authToken: parsed.data.NGROK_AUTH_TOKEN,
         domain: parsed.data.NGROK_DOMAIN, // Static domain
     },
-    redis: parsed.data.REDIS_HOST ? {
-        host: parsed.data.REDIS_HOST,
-        port: parsed.data.REDIS_PORT,
-        password: parsed.data.REDIS_PASSWORD,
-    } : null,
+    redis: parsed.data.REDIS_HOST
+        ? {
+            host: parsed.data.REDIS_HOST,
+            port: parsed.data.REDIS_PORT,
+            password: parsed.data.REDIS_PASSWORD,
+        }
+        : null,
     scheduler: {
         enabled: parsed.data.SCHEDULER_ENABLED,
     },
@@ -92,4 +110,3 @@ export const config = {
 } as const;
 
 export type Config = typeof config;
-

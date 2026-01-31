@@ -1,14 +1,14 @@
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import crypto from 'crypto';
-import { config } from '../config/index.js';
-import { logger } from '../utils/logger.js';
+import { config } from '../../config/index.js';
+import { logger } from '../../common/utils/logger.js';
 import type {
     TheSieuTocSubmitResponse,
     SubmitCardRequest,
     CardDiscount,
     CardStatusResponse,
-} from '../types/index.js';
-import { SUBMIT_STATUS } from '../types/index.js';
+} from '../../common/types/index.js';
+import { SUBMIT_STATUS } from '../../common/types/index.js';
 
 const api = axios.create({
     baseURL: config.thesieutoc.baseUrl,
@@ -22,12 +22,15 @@ const api = axios.create({
 export function generateTransactionId(): string {
     const timestamp = Date.now().toString();
     const random = Math.random().toString() + crypto.randomBytes(8).toString('hex');
-    return crypto.createHash('md5').update(timestamp + random).digest('hex');
+    return crypto
+        .createHash('md5')
+        .update(timestamp + random)
+        .digest('hex');
 }
 
 /**
  * 1.1 Submit Card - POST/GET /chargingws/v2
- * 
+ *
  * Params:
  * - APIkey: API key from website
  * - mathe: Card PIN
@@ -55,7 +58,9 @@ export async function submitCard(
             `/chargingws/v2?${params.toString()}`
         );
 
-        logger.info(`[Submit Card] ${data.card_type} ${data.card_amount} -> Status: ${response.data.status}`);
+        logger.info(
+            `[Submit Card] ${data.card_type} ${data.card_amount} -> Status: ${response.data.status}`
+        );
         return response.data;
     } catch (error) {
         logger.error(`[Submit Card] Lỗi: ${error}`);
@@ -65,18 +70,18 @@ export async function submitCard(
 
 /**
  * 1.0 Get Card Discounts - GET /topup/discount/{account?}
- * 
+ *
  * - Without account: Get default discounts
  * - With account: Get account-specific discounts
  */
 export async function getCardDiscounts(account?: string): Promise<CardDiscount[]> {
     try {
-        const url = account
-            ? `/topup/discount/${encodeURIComponent(account)}`
-            : '/topup/discount';
+        const url = account ? `/topup/discount/${encodeURIComponent(account)}` : '/topup/discount';
 
         const response = await api.get<CardDiscount[]>(url);
-        logger.info(`[Get Discount] Account: ${account || 'default'}, Cards: ${response.data.length}`);
+        logger.info(
+            `[Get Discount] Account: ${account || 'default'}, Cards: ${response.data.length}`
+        );
         return response.data;
     } catch (error) {
         logger.error(`[Get Discount] Lỗi: ${error}`);
@@ -86,11 +91,11 @@ export async function getCardDiscounts(account?: string): Promise<CardDiscount[]
 
 /**
  * 1.3 Check Card Status - POST/GET /chargingws/status_card
- * 
+ *
  * Params:
  * - APIkey: API key
  * - content: Reference ID (transaction_id from submit)
- * 
+ *
  * Response status:
  * - "00": Success
  * - "99": Wrong amount

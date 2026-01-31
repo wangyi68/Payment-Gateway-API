@@ -26,8 +26,8 @@ export const CardAmount = z.enum([
     '300000',
     '500000',
     '1000000',
-    '2000000',  // Vcoin only
-    '5000000',  // Vcoin only
+    '2000000', // Vcoin only
+    '5000000', // Vcoin only
 ]);
 export type CardAmount = z.infer<typeof CardAmount>;
 
@@ -48,12 +48,11 @@ export const SubmitCardRequest = z.object({
     username: z.string().min(1, 'Username is required').max(100),
     card_type: CardType,
     card_amount: CardAmount,
-    serial: z.string()
+    serial: z
+        .string()
         .min(1, 'Serial is required')
         .regex(/^\d+$/, 'Serial must contain only numbers'),
-    pin: z.string()
-        .min(1, 'PIN is required')
-        .regex(/^\d+$/, 'PIN must contain only numbers'),
+    pin: z.string().min(1, 'PIN is required').regex(/^\d+$/, 'PIN must contain only numbers'),
 });
 export type SubmitCardRequest = z.infer<typeof SubmitCardRequest>;
 
@@ -68,16 +67,16 @@ export interface TheSieuTocSubmitResponse {
 
 // TheSieuToc Submit Status Codes
 export const SUBMIT_STATUS = {
-    SUCCESS: '00',           // Thẻ đã gửi lên hệ thống chờ xử lý
-    NO_API_KEY: '54',        // Chưa nhập API key
-    INVALID_API: '1',        // Sai thông tin API
-    ACCOUNT_LOCKED: '3',     // Tài khoản đã bị khóa
-    MAINTENANCE: '-1089',    // Thẻ đang bảo trì
-    CARD_USED: '2',          // Thẻ đã được sử dụng trên hệ thống
-    NO_SERIAL: '56',         // Chưa nhập Seri
-    NO_PIN: '55',            // Chưa nhập mã thẻ
-    NO_AMOUNT: '52',         // Chưa chọn mệnh giá
-    UNKNOWN_ERROR: '47',     // Lỗi không xác định
+    SUCCESS: '00', // Thẻ đã gửi lên hệ thống chờ xử lý
+    NO_API_KEY: '54', // Chưa nhập API key
+    INVALID_API: '1', // Sai thông tin API
+    ACCOUNT_LOCKED: '3', // Tài khoản đã bị khóa
+    MAINTENANCE: '-1089', // Thẻ đang bảo trì
+    CARD_USED: '2', // Thẻ đã được sử dụng trên hệ thống
+    NO_SERIAL: '56', // Chưa nhập Seri
+    NO_PIN: '55', // Chưa nhập mã thẻ
+    NO_AMOUNT: '52', // Chưa chọn mệnh giá
+    UNKNOWN_ERROR: '47', // Lỗi không xác định
 } as const;
 
 // ============================================================
@@ -89,19 +88,19 @@ export const CallbackData = z.object({
     serial: z.string(),
     pin: z.string(),
     card_type: z.string(),
-    amount: z.string(),              // Mệnh giá thẻ (cập nhật nếu sai mệnh giá)
+    amount: z.string(), // Mệnh giá thẻ (cập nhật nếu sai mệnh giá)
     receive_amount: z.string().optional(), // Mệnh giá chấp nhận cộng tiền
-    real_amount: z.string(),         // Số tiền thực nhận sau trừ chiết khấu
-    noidung: z.string().optional(),  // Thông báo kết quả
-    content: z.string(),             // Mã đối chiếu (transaction_id)
+    real_amount: z.string(), // Số tiền thực nhận sau trừ chiết khấu
+    noidung: z.string().optional(), // Thông báo kết quả
+    content: z.string(), // Mã đối chiếu (transaction_id)
 });
 export type CallbackData = z.infer<typeof CallbackData>;
 
 // Callback Status
 export const CALLBACK_STATUS = {
-    SUCCESS: 'thanhcong',      // Thẻ đúng
+    SUCCESS: 'thanhcong', // Thẻ đúng
     WRONG_AMOUNT: 'saimenhgia', // Thẻ sai mệnh giá
-    FAILED: 'thatbai',          // Thẻ sai
+    FAILED: 'thatbai', // Thẻ sai
 } as const;
 
 // ============================================================
@@ -115,17 +114,17 @@ export type CheckStatusRequest = z.infer<typeof CheckStatusRequest>;
 
 export interface CardStatusResponse {
     status: string;
-    amount?: number;    // Mệnh giá thật của thẻ
-    msg?: string;       // Ghi chú tình trạng thẻ
+    amount?: number; // Mệnh giá thật của thẻ
+    msg?: string; // Ghi chú tình trạng thẻ
 }
 
 // Check Status Codes
 export const CHECK_STATUS = {
-    SUCCESS: '00',      // Thẻ thành công
+    SUCCESS: '00', // Thẻ thành công
     WRONG_AMOUNT: '99', // Thẻ sai mệnh giá
-    FAILED: '-10',      // Thẻ sai
-    PENDING: '-9',      // Thẻ chờ duyệt
-    ERROR: '2',         // Lỗi không kiểm tra được
+    FAILED: '-10', // Thẻ sai
+    PENDING: '-9', // Thẻ chờ duyệt
+    ERROR: '2', // Lỗi không kiểm tra được
 } as const;
 
 // ============================================================
@@ -153,5 +152,5 @@ export interface ApiResponse<T = unknown> {
     message: string;
     data?: T;
     error?: string;
-    code?: string;  // TheSieuToc status code
+    code?: string; // TheSieuToc status code
 }

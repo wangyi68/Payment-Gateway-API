@@ -1,5 +1,5 @@
 import { initializeDatabase } from './index.js';
-import { logger } from '../utils/logger.js';
+import { logger } from '../common/utils/logger.js';
 
 async function migrate() {
     try {

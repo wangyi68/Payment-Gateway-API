@@ -1,33 +1,21 @@
 import { Router } from 'express';
-import {
-    submitCardHandler,
-    getDiscountHandler,
-    checkStatusHandler,
-    getHistoryHandler,
-    searchTransactionHandler,
-    getTransactionLogsHandler,
-} from '../controllers/card.controller.js';
-import { callbackHandler } from '../controllers/callback.controller.js';
-import { getSystemInfoHandler } from '../controllers/system.controller.js';
 
 const router = Router();
 
-// System routes
-router.get('/system/info', getSystemInfoHandler);
+// Card Routes - /api/card/*
+import cardRoutes from '../modules/card/card.routes.js';
+router.use('/card', cardRoutes);
 
-// Card routes
-router.post('/card', submitCardHandler);
-router.get('/card/discount/:account?', getDiscountHandler);
-router.post('/card/status', checkStatusHandler);
+// Transaction Routes - /api/transaction/*
+import transactionRoutes from '../modules/transaction/transaction.routes.js';
+router.use('/transaction', transactionRoutes);
 
-// Transaction routes
-router.get('/transaction/search', searchTransactionHandler);
-router.get('/transaction/:id/logs', getTransactionLogsHandler);
+// PayOS Routes - /api/payos/*
+import payosRoutes from '../modules/payment/payos.routes.js';
+router.use('/payos', payosRoutes);
 
-// History route (Legacy)
-router.get('/history', getHistoryHandler);
-
-// Callback route (from TheSieuToc)
-router.post('/callback', callbackHandler);
+// System Routes - /api/system/*
+import systemRoutes from '../modules/system/system.routes.js';
+router.use('/system', systemRoutes);
 
 export default router;

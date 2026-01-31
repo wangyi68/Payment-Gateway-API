@@ -9,17 +9,13 @@ import * as cron from 'node-cron';
 import fs from 'fs';
 import path from 'path';
 import { db } from '../database/index.js';
-import { logger } from '../utils/logger.js';
-import { checkCardStatus } from './thesieutoc.service.js';
-import { updateTransactionStatus } from './transaction.service.js';
-import {
-    getDueCallbackRetries,
-    rescheduleCallbackRetry,
-} from './queue.service.js';
+import { logger } from '../common/utils/logger.js';
+import { checkCardStatus } from '../modules/card/thesieutoc.service.js';
+import { updateTransactionStatus } from '../modules/transaction/transaction.service.js';
+import { getDueCallbackRetries, rescheduleCallbackRetry } from './queue.service.js';
 import { TransactionStatus } from '../database/index.js';
-import { CHECK_STATUS } from '../types/index.js';
+import { CHECK_STATUS } from '../common/types/index.js';
 import axios from 'axios';
-
 
 // ============================================================
 // Cấu hình Scheduler
@@ -83,7 +79,7 @@ async function checkPendingTransactions(): Promise<void> {
                 }
 
                 // Rate limit: chờ 500ms giữa các API calls
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise((resolve) => setTimeout(resolve, 500));
             } catch (error) {
                 logger.error(`[Scheduler] Lỗi khi kiểm tra ${tx.trans_id}: ${error}`);
             }
@@ -91,7 +87,7 @@ async function checkPendingTransactions(): Promise<void> {
 
         logger.info(
             `[Scheduler] Hoàn tất: ${successCount} thành công, ` +
-            `${failedCount} thất bại, ${stillPending} vẫn đang chờ`
+                `${failedCount} thất bại, ${stillPending} vẫn đang chờ`
         );
     } catch (error) {
         logger.error(`[Scheduler] Lỗi trong checkPendingTransactions: ${error}`);
@@ -139,15 +135,15 @@ async function retryFailedCallbacks(): Promise<void> {
 // ============================================================
 
 interface CleanupConfig {
-    transactionDays: number;  // Số ngày giữ giao dịch
-    logDays: number;          // Số ngày giữ log files
-    blacklistDays: number;    // Số ngày giữ blacklist
+    transactionDays: number; // Số ngày giữ giao dịch
+    logDays: number; // Số ngày giữ log files
+    blacklistDays: number; // Số ngày giữ blacklist
 }
 
 const defaultCleanupConfig: CleanupConfig = {
-    transactionDays: 90,   // 3 tháng
-    logDays: 30,           // 1 tháng
-    blacklistDays: 180,    // 6 tháng
+    transactionDays: 90, // 3 tháng
+    logDays: 30, // 1 tháng
+    blacklistDays: 180, // 6 tháng
 };
 
 async function cleanupOldData(config: CleanupConfig = defaultCleanupConfig): Promise<void> {
@@ -206,11 +202,14 @@ async function cleanupLogFiles(daysToKeep: number): Promise<void> {
     for (const file of files) {
         // Bỏ qua các file log quan trọng (không xóa)
         // cardsuccess.log: Lưu tất cả thẻ nạp thành công - KHÔNG BAO GIỜ XÓA
+        // payossuccess.log: Lưu tất cả thanh toán PayOS thành công - KHÔNG BAO GIỜ XÓA
         const protectedFiles = [
             'combined.log',
             'error.log',
             'card.log',
-            'cardsuccess.log'  // File này KHÔNG bị xóa
+            'cardsuccess.log', // File này KHÔNG bị xóa
+            'payos.log',
+            'payossuccess.log', // File này KHÔNG bị xóa
         ];
         if (protectedFiles.includes(file)) {
             continue;
@@ -252,7 +251,9 @@ async function databaseMaintenance(): Promise<void> {
         if (integrityCheck[0]?.integrity_check === 'ok') {
             logger.info('[Maintenance] Kiểm tra toàn vẹn database: OK');
         } else {
-            logger.error(`[Maintenance] Kiểm tra toàn vẹn thất bại: ${JSON.stringify(integrityCheck)}`);
+            logger.error(
+                `[Maintenance] Kiểm tra toàn vẹn thất bại: ${JSON.stringify(integrityCheck)}`
+            );
         }
 
         logger.info('[Scheduler] Bảo trì database hoàn tất');
@@ -274,7 +275,9 @@ async function generateDailyStats(): Promise<void> {
         yesterday.setDate(yesterday.getDate() - 1);
         const dateStr = yesterday.toISOString().split('T')[0];
 
-        const stats = db.prepare(`
+        const stats = db
+            .prepare(
+                `
             SELECT
                 COUNT(*) as total_transactions,
                 SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as success_count,
@@ -285,7 +288,9 @@ async function generateDailyStats(): Promise<void> {
             FROM trans_log
             WHERE date(date) = ?
             GROUP BY type
-        `).all(dateStr) as {
+        `
+            )
+            .all(dateStr) as {
             total_transactions: number;
             success_count: number;
             failed_count: number;
@@ -296,7 +301,9 @@ async function generateDailyStats(): Promise<void> {
 
         logger.info(`[Stats] Thống kê ngày ${dateStr}:`);
         for (const stat of stats) {
-            logger.info(`[Stats] - ${stat.type}: ${stat.success_count}/${stat.total_transactions} (${stat.total_success_amount.toLocaleString()}đ)`);
+            logger.info(
+                `[Stats] - ${stat.type}: ${stat.success_count}/${stat.total_transactions} (${stat.total_success_amount.toLocaleString()}đ)`
+            );
         }
     } catch (error) {
         logger.error(`[Scheduler] Lỗi trong generateDailyStats: ${error}`);
@@ -384,7 +391,7 @@ export function getSchedulerStatus(): Array<{
     cronExpression: string;
     enabled: boolean;
 }> {
-    return scheduledTasks.map(t => ({
+    return scheduledTasks.map((t) => ({
         name: t.name,
         cronExpression: t.cronExpression,
         enabled: t.enabled,

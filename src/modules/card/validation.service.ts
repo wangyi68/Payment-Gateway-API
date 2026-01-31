@@ -5,10 +5,9 @@
  * - Phát hiện thẻ trùng lặp
  */
 
-import { db } from '../database/index.js';
-import { logger } from '../utils/logger.js';
-import type { CardType } from '../types/index.js';
-
+import { db } from '../../database/index.js';
+import { logger } from '../../common/utils/logger.js';
+import type { CardType } from '../../common/types/index.js';
 
 // ============================================================
 // Mẫu validation theo từng nhà mạng
@@ -300,14 +299,18 @@ export function checkDuplicate(
         LIMIT 1
     `);
 
-    const existing = stmt.get(serial, pin, withinHours) as {
-        trans_id: string;
-        date: string;
-        status: number;
-    } | undefined;
+    const existing = stmt.get(serial, pin, withinHours) as
+        | {
+              trans_id: string;
+              date: string;
+              status: number;
+          }
+        | undefined;
 
     if (existing) {
-        logger.warn(`[Duplicate] Thẻ ${serial.slice(0, 4)}**** đã được gửi trong ${withinHours}h gần đây`);
+        logger.warn(
+            `[Duplicate] Thẻ ${serial.slice(0, 4)}**** đã được gửi trong ${withinHours}h gần đây`
+        );
         return {
             isDuplicate: true,
             existingTransaction: existing,
@@ -362,7 +365,7 @@ export function validateCard(
         duplicateInfo = duplicateResult.existingTransaction;
         warnings.push(
             `Thẻ này đã được gửi trước đó vào ${duplicateInfo?.date}, ` +
-            `mã giao dịch: ${duplicateInfo?.trans_id}`
+                `mã giao dịch: ${duplicateInfo?.trans_id}`
         );
     }
 
