@@ -24,12 +24,13 @@ export function getHistoryHandler(
             id: tx.id,
             name: tx.name,
             amount: tx.amount,
-            seri: tx.seri,
+            seri: tx.seri || '',
             type: tx.type,
             status: tx.status,
             statusText: getStatusText(tx.status),
             trans_id: tx.trans_id,
             date: tx.date,
+            method: tx.method,
         }));
 
         res.json({
@@ -72,12 +73,13 @@ export function searchTransactionHandler(
             id: tx.id,
             name: tx.name,
             amount: tx.amount,
-            seri: tx.seri,
+            seri: tx.seri || '',
             type: tx.type,
             status: tx.status,
             statusText: getStatusText(tx.status),
             trans_id: tx.trans_id,
             date: tx.date,
+            method: tx.method,
         }));
 
         res.json({
@@ -131,7 +133,9 @@ export function getTransactionLogsHandler(req: Request, res: Response<ApiRespons
                     {
                         time: tx.date,
                         event: 'CREATED',
-                        message: `Giao dịch được tạo. Serial: ${tx.seri}, Amount: ${tx.amount}`,
+                        message: tx.method === 'payos'
+                            ? `Giao dịch được tạo (QR PayOS). OrderCode: ${tx.id}, Amount: ${tx.amount}`
+                            : `Giao dịch được tạo (Card). Serial: ${tx.seri}, Amount: ${tx.amount}`,
                     },
                     {
                         time: tx.date,
@@ -149,3 +153,5 @@ export function getTransactionLogsHandler(req: Request, res: Response<ApiRespons
         });
     }
 }
+
+

@@ -10,131 +10,6 @@ import { logger } from '../../common/utils/logger.js';
 import type { CardType } from '../../common/types/index.js';
 
 // ============================================================
-// Mẫu validation theo từng nhà mạng
-// ============================================================
-
-interface TelcoPattern {
-    name: string;
-    serial: {
-        pattern: RegExp;
-        length: number[];
-        description: string;
-    };
-    pin: {
-        pattern: RegExp;
-        length: number[];
-        description: string;
-    };
-}
-
-export const TELCO_PATTERNS: Record<string, TelcoPattern> = {
-    Viettel: {
-        name: 'Viettel',
-        serial: {
-            pattern: /^[0-9]{11,15}$/,
-            length: [11, 12, 13, 14, 15],
-            description: 'Serial Viettel phải từ 11-15 chữ số',
-        },
-        pin: {
-            pattern: /^[0-9]{12,15}$/,
-            length: [12, 13, 14, 15],
-            description: 'Mã thẻ Viettel phải từ 12-15 chữ số',
-        },
-    },
-    Mobifone: {
-        name: 'Mobifone',
-        serial: {
-            pattern: /^[0-9]{12,15}$/,
-            length: [12, 13, 14, 15],
-            description: 'Serial Mobifone phải từ 12-15 chữ số',
-        },
-        pin: {
-            pattern: /^[0-9]{12,14}$/,
-            length: [12, 13, 14],
-            description: 'Mã thẻ Mobifone phải từ 12-14 chữ số',
-        },
-    },
-    Vinaphone: {
-        name: 'Vinaphone',
-        serial: {
-            pattern: /^[0-9]{12,14}$/,
-            length: [12, 13, 14],
-            description: 'Serial Vinaphone phải từ 12-14 chữ số',
-        },
-        pin: {
-            pattern: /^[0-9]{12,14}$/,
-            length: [12, 13, 14],
-            description: 'Mã thẻ Vinaphone phải từ 12-14 chữ số',
-        },
-    },
-    Vietnamobile: {
-        name: 'Vietnamobile',
-        serial: {
-            pattern: /^[0-9]{12,15}$/,
-            length: [12, 13, 14, 15],
-            description: 'Serial Vietnamobile phải từ 12-15 chữ số',
-        },
-        pin: {
-            pattern: /^[0-9]{12,15}$/,
-            length: [12, 13, 14, 15],
-            description: 'Mã thẻ Vietnamobile phải từ 12-15 chữ số',
-        },
-    },
-    Zing: {
-        name: 'Zing',
-        serial: {
-            pattern: /^[0-9]{9,12}$/,
-            length: [9, 10, 11, 12],
-            description: 'Serial Zing phải từ 9-12 chữ số',
-        },
-        pin: {
-            pattern: /^[0-9]{9,12}$/,
-            length: [9, 10, 11, 12],
-            description: 'Mã thẻ Zing phải từ 9-12 chữ số',
-        },
-    },
-    Gate: {
-        name: 'Gate',
-        serial: {
-            pattern: /^[0-9]{10,15}$/,
-            length: [10, 11, 12, 13, 14, 15],
-            description: 'Serial Gate phải từ 10-15 chữ số',
-        },
-        pin: {
-            pattern: /^[0-9]{10,15}$/,
-            length: [10, 11, 12, 13, 14, 15],
-            description: 'Mã thẻ Gate phải từ 10-15 chữ số',
-        },
-    },
-    Garena: {
-        name: 'Garena',
-        serial: {
-            pattern: /^[A-Za-z0-9]{10,20}$/,
-            length: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
-            description: 'Serial Garena phải từ 10-20 ký tự (chữ và số)',
-        },
-        pin: {
-            pattern: /^[A-Za-z0-9]{10,20}$/,
-            length: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
-            description: 'Mã thẻ Garena phải từ 10-20 ký tự (chữ và số)',
-        },
-    },
-    Vcoin: {
-        name: 'Vcoin',
-        serial: {
-            pattern: /^[0-9]{10,15}$/,
-            length: [10, 11, 12, 13, 14, 15],
-            description: 'Serial Vcoin phải từ 10-15 chữ số',
-        },
-        pin: {
-            pattern: /^[0-9]{10,15}$/,
-            length: [10, 11, 12, 13, 14, 15],
-            description: 'Mã thẻ Vcoin phải từ 10-15 chữ số',
-        },
-    },
-};
-
-// ============================================================
 // Kết quả Validation
 // ============================================================
 
@@ -144,32 +19,31 @@ export interface ValidationResult {
 }
 
 // ============================================================
-// Kiểm tra định dạng serial và pin theo nhà mạng
+// Kiểm tra định dạng serial và pin (Cơ bản)
 // ============================================================
 
 export function validateCardFormat(
-    cardType: CardType,
+    _cardType: CardType,
     serial: string,
     pin: string
 ): ValidationResult {
     const errors: string[] = [];
-    const telcoPattern = TELCO_PATTERNS[cardType];
 
-    if (!telcoPattern) {
-        return {
-            valid: false,
-            errors: [`Loại thẻ không hợp lệ: ${cardType}`],
-        };
+    // Kiểm tra độ dài tối thiểu (thường thẻ cào > 6 ký tự)
+    if (serial.length < 6) {
+        errors.push('Serial không hợp lệ (quá ngắn)');
+    }
+    if (pin.length < 6) {
+        errors.push('Mã thẻ không hợp lệ (quá ngắn)');
     }
 
-    // Kiểm tra serial
-    if (!telcoPattern.serial.pattern.test(serial)) {
-        errors.push(telcoPattern.serial.description);
+    // Chỉ cho phép chữ và số (Alphanumeric)
+    const alphanumericRegex = /^[A-Za-z0-9]+$/;
+    if (!alphanumericRegex.test(serial)) {
+        errors.push('Serial chỉ được chứa chữ và số');
     }
-
-    // Kiểm tra pin
-    if (!telcoPattern.pin.pattern.test(pin)) {
-        errors.push(telcoPattern.pin.description);
+    if (!alphanumericRegex.test(pin)) {
+        errors.push('Mã thẻ chỉ được chứa chữ và số');
     }
 
     return {
@@ -301,10 +175,10 @@ export function checkDuplicate(
 
     const existing = stmt.get(serial, pin, withinHours) as
         | {
-              trans_id: string;
-              date: string;
-              status: number;
-          }
+            trans_id: string;
+            date: string;
+            status: number;
+        }
         | undefined;
 
     if (existing) {
@@ -365,7 +239,7 @@ export function validateCard(
         duplicateInfo = duplicateResult.existingTransaction;
         warnings.push(
             `Thẻ này đã được gửi trước đó vào ${duplicateInfo?.date}, ` +
-                `mã giao dịch: ${duplicateInfo?.trans_id}`
+            `mã giao dịch: ${duplicateInfo?.trans_id}`
         );
     }
 
@@ -402,3 +276,5 @@ export function getBlacklistStats(): {
 
     return { total, byType };
 }
+
+

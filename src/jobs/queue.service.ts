@@ -491,3 +491,5 @@ export async function closeRedis(): Promise<void> {
         logger.info('[Queue] Đã đóng kết nối Redis');
     }
 }
+
+

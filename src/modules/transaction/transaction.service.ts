@@ -102,79 +102,191 @@ export function updateTransactionStatus(params: {
 }
 
 /**
- * Get transaction history (latest 10)
+ * Get unified transaction history (latest transactions from both Card & PayOS)
  */
-export function getTransactionHistory(limit: number = 10): Transaction[] {
+export function getTransactionHistory(limit: number = 10): any[] {
     const stmt = db.prepare(`
-    SELECT * FROM trans_log ORDER BY id DESC LIMIT ?
+    SELECT 
+        'card' as method,
+        id, 
+        name, 
+        amount, 
+        seri, 
+        pin, 
+        type, 
+        status, 
+        trans_id, 
+        date
+    FROM trans_log
+    UNION ALL
+    SELECT 
+        'payos' as method,
+        orderCode as id, 
+        description as name, 
+        amount, 
+        '' as seri, 
+        '' as pin, 
+        'PayOS' as type, 
+        CASE 
+            WHEN status = 'SUCCESS' THEN 1
+            WHEN status = 'FAILED' THEN 2
+            WHEN status = 'CANCELLED' THEN 2
+            ELSE 0 
+        END as status,
+        CAST(orderCode AS TEXT) as trans_id, 
+        createdAt as date
+    FROM payos_log
+    ORDER BY date DESC LIMIT ?
   `);
 
-    return stmt.all(limit) as Transaction[];
+    return stmt.all(limit);
 }
 
 /**
- * Get transaction by ID
+ * Get transaction by ID (Checks both Card and PayOS)
  */
-export function getTransactionById(id: number): Transaction | undefined {
-    const stmt = db.prepare('SELECT * FROM trans_log WHERE id = ?');
-    return stmt.get(id) as Transaction | undefined;
+export function getTransactionById(id: number): any | undefined {
+    // Try card first
+    const cardStmt = db.prepare('SELECT *, \'card\' as method FROM trans_log WHERE id = ?');
+    const cardTx = cardStmt.get(id);
+    if (cardTx) return cardTx;
+
+    // Try payos
+    const payosStmt = db.prepare(`
+    SELECT 
+        'payos' as method,
+        orderCode as id, 
+        description as name, 
+        amount, 
+        '' as seri, 
+        '' as pin, 
+        'PayOS' as type, 
+        CASE 
+            WHEN status = 'SUCCESS' THEN 1
+            WHEN status = 'FAILED' THEN 2
+            WHEN status = 'CANCELLED' THEN 2
+            ELSE 0 
+        END as status,
+        CAST(orderCode AS TEXT) as trans_id, 
+        createdAt as date,
+        reference,
+        payment_method,
+        counter_account_name,
+        counter_account_number
+    FROM payos_log 
+    WHERE orderCode = ?
+  `);
+    return payosStmt.get(id);
 }
 
 /**
  * Get transaction by trans_id
  */
-export function getTransactionByTransId(transId: string): Transaction | undefined {
-    const stmt = db.prepare('SELECT * FROM trans_log WHERE trans_id = ?');
-    return stmt.get(transId) as Transaction | undefined;
+export function getTransactionByTransId(transId: string): any | undefined {
+    const stmt = db.prepare('SELECT *, \'card\' as method FROM trans_log WHERE trans_id = ?');
+    const cardTx = stmt.get(transId);
+    if (cardTx) return cardTx;
+
+    // Try payos orderCode
+    const orderCode = parseInt(transId);
+    if (!isNaN(orderCode)) {
+        return getTransactionById(orderCode);
+    }
+    return undefined;
 }
 
 /**
- * Search transactions
+ * Search transactions across both Card and PayOS
  */
 export function searchTransactions(criteria: {
     trans_id?: string;
-    code?: string; // trans_id or request_id
+    code?: string; // trans_id or request_id or orderCode
     serial?: string;
     pin?: string;
     status?: number;
     limit?: number;
     offset?: number;
-}): Transaction[] {
-    let query = 'SELECT * FROM trans_log WHERE 1=1';
-    const params: (string | number)[] = [];
+}): any[] {
+    const limit = criteria.limit || 20;
+    const offset = criteria.offset || 0;
+
+    let cardQuery = 'SELECT \'card\' as method, id, name, amount, seri, pin, type, status, trans_id, date FROM trans_log WHERE 1=1';
+    let payosQuery = `
+    SELECT 
+        'payos' as method,
+        orderCode as id, 
+        description as name, 
+        amount, 
+        '' as seri, 
+        '' as pin, 
+        'PayOS' as type, 
+        CASE 
+            WHEN status = 'SUCCESS' THEN 1
+            WHEN status = 'FAILED' THEN 2
+            WHEN status = 'CANCELLED' THEN 2
+            ELSE 0 
+        END as status,
+        CAST(orderCode AS TEXT) as trans_id, 
+        createdAt as date
+    FROM payos_log 
+    WHERE 1=1
+  `;
+
+    const cardParams: any[] = [];
+    const payosParams: any[] = [];
 
     if (criteria.trans_id) {
-        query += ' AND trans_id = ?';
-        params.push(criteria.trans_id);
+        cardQuery += ' AND trans_id = ?';
+        cardParams.push(criteria.trans_id);
+
+        payosQuery += ' AND CAST(orderCode AS TEXT) = ?';
+        payosParams.push(criteria.trans_id);
     }
 
-    // Fuzzy search for code (trans_id alias)
     if (criteria.code) {
-        query += ' AND trans_id LIKE ?';
-        params.push(`%${criteria.code}%`);
+        cardQuery += ' AND (trans_id LIKE ? OR request_id LIKE ?)';
+        cardParams.push(`%${criteria.code}%`, `%${criteria.code}%`);
+
+        payosQuery += ' AND (CAST(orderCode AS TEXT) LIKE ? OR description LIKE ?)';
+        payosParams.push(`%${criteria.code}%`, `%${criteria.code}%`);
     }
 
     if (criteria.serial) {
-        query += ' AND seri = ?';
-        params.push(criteria.serial);
+        cardQuery += ' AND seri = ?';
+        cardParams.push(criteria.serial);
+
+        // PayOS has no serial, so this branch will return nothing for PayOS if serial is provided
+        payosQuery += ' AND 1=0';
     }
 
     if (criteria.pin) {
-        query += ' AND pin = ?';
-        params.push(criteria.pin);
+        cardQuery += ' AND pin = ?';
+        cardParams.push(criteria.pin);
+
+        // PayOS has no pin
+        payosQuery += ' AND 1=0';
     }
 
     if (criteria.status !== undefined) {
-        query += ' AND status = ?';
-        params.push(criteria.status);
+        cardQuery += ' AND status = ?';
+        cardParams.push(criteria.status);
+
+        // Map status back to PayOS string for filtering if needed, but easier to use the CASE logic in a subquery or just handle it here.
+        // For simplicity, we filter by the mapped numeric status
+        payosQuery = `SELECT * FROM (${payosQuery}) AS p WHERE p.status = ?`;
+        payosParams.push(criteria.status);
     }
 
-    query += ' ORDER BY id DESC LIMIT ? OFFSET ?';
-    params.push(criteria.limit || 20);
-    params.push(criteria.offset || 0);
+    const unifiedQuery = `
+    SELECT * FROM (${cardQuery})
+    UNION ALL
+    SELECT * FROM (${payosQuery})
+    ORDER BY date DESC LIMIT ? OFFSET ?
+  `;
 
-    const stmt = db.prepare(query);
-    return stmt.all(...params) as Transaction[];
+    const allParams = [...cardParams, ...payosParams, limit, offset];
+    const stmt = db.prepare(unifiedQuery);
+    return stmt.all(...allParams);
 }
 
 /**
@@ -193,3 +305,5 @@ export function getStatusText(status: TransactionStatus): string {
             return 'Chờ Duyệt';
     }
 }
+
+

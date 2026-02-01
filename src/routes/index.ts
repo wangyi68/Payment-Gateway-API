@@ -3,8 +3,8 @@ import { Router } from 'express';
 const router = Router();
 
 // Card Routes - /api/card/*
-import cardRoutes from '../modules/card/card.routes.js';
-router.use('/card', cardRoutes);
+import thesieutocRoutes from '../modules/card/thesieutoc.routes.js';
+router.use('/thesieutoc', thesieutocRoutes);
 
 // Transaction Routes - /api/transaction/*
 import transactionRoutes from '../modules/transaction/transaction.routes.js';
@@ -19,3 +19,4 @@ import systemRoutes from '../modules/system/system.routes.js';
 router.use('/system', systemRoutes);
 
 export default router;
+

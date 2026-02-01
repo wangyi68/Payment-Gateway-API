@@ -51,8 +51,11 @@ export const SubmitCardRequest = z.object({
     serial: z
         .string()
         .min(1, 'Serial is required')
-        .regex(/^\d+$/, 'Serial must contain only numbers'),
-    pin: z.string().min(1, 'PIN is required').regex(/^\d+$/, 'PIN must contain only numbers'),
+        .regex(/^[A-Za-z0-9]+$/, 'Serial must contain only letters and numbers'),
+    pin: z
+        .string()
+        .min(1, 'PIN is required')
+        .regex(/^[A-Za-z0-9]+$/, 'PIN must contain only letters and numbers'),
 });
 export type SubmitCardRequest = z.infer<typeof SubmitCardRequest>;
 
@@ -132,7 +135,7 @@ export const CHECK_STATUS = {
 // ============================================================
 
 export interface TransactionHistory {
-    id: number;
+    id: number | string;
     name: string;
     amount: number;
     seri: string;
@@ -141,6 +144,7 @@ export interface TransactionHistory {
     statusText: string;
     trans_id: string;
     date: string;
+    method?: string; // 'card' or 'payos'
 }
 
 // ============================================================

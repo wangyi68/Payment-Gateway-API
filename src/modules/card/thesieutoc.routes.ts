@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { submitCardHandler, getDiscountHandler, checkStatusHandler } from './card.controller.js';
+import { submitCardHandler, getDiscountHandler, checkStatusHandler } from './thesieutoc.controller.js';
 import { callbackHandler } from '../callback/callback.controller.js';
 import { strictRateLimiter } from '../../common/middleware/rate-limit.js';
 
@@ -18,3 +18,5 @@ router.post('/status', strictRateLimiter, checkStatusHandler);
 router.post('/callback', callbackHandler);
 
 export default router;
+
+
