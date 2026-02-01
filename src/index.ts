@@ -49,8 +49,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
 
 // Static files
-app.use(express.static('public'));
-
 // API routes
 app.use('/api', globalRateLimiter, routes);
 
@@ -60,6 +58,9 @@ app.get('/health/live', livenessHandler);
 app.get('/health/ready', readinessHandler);
 app.get('/health/ping', pingHandler);
 app.get('/health/version', versionHandler);
+
+// Return/Cancel callback endpoints (JSON response instead of UI)
+
 
 // Root route - API info
 app.get('/', (_req, res) => {

@@ -239,12 +239,12 @@ export class PayOSService {
     }
 
     processWebhookResult(webhookBody: PayOSWebhookPayload): {
-        status: 'SUCCESS' | 'FAILED' | 'PENDING';
+        status: 'SUCCESS' | 'FAILED' | 'PENDING' | 'CANCELLED';
         message: string;
         orderCode: number;
     } {
         const { code, desc, data } = webhookBody;
-        let status: 'SUCCESS' | 'FAILED' | 'PENDING';
+        let status: 'SUCCESS' | 'FAILED' | 'PENDING' | 'CANCELLED';
         let message: string;
 
         switch (code) {
@@ -257,7 +257,7 @@ export class PayOSService {
                 message = desc || 'Đang chờ xử lý';
                 break;
             case PAYOS_CODES.CANCELLED:
-                status = 'FAILED';
+                status = 'CANCELLED';
                 message = desc || 'Đã hủy';
                 break;
             default:

@@ -19,5 +19,22 @@ router.use('/payos', payosRoutes);
 import systemRoutes from '../modules/system/system.routes.js';
 router.use('/system', apiKeyAuth, systemRoutes);
 
+// General Success/Cancel Callback Routes (Public)
+router.get('/success', (req, res) => {
+    res.json({
+        success: true,
+        message: 'Payment Successful',
+        data: req.query,
+    });
+});
+
+router.get('/cancel', (req, res) => {
+    res.json({
+        success: false,
+        message: 'Payment Cancelled',
+        data: req.query,
+    });
+});
+
 export default router;
 
