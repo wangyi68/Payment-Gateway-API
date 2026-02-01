@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { payOSController } from './payos.controller.js';
 import { asyncHandler } from '../../common/middleware/index.js';
 import { strictRateLimiter } from '../../common/middleware/rate-limit.js';
+import { apiKeyAuth } from '../../common/middleware/auth.js';
 
 const router = Router();
 
@@ -23,6 +24,7 @@ const router = Router();
  */
 router.post(
     '/checkout',
+    apiKeyAuth,
     strictRateLimiter,
     asyncHandler((req, res) => payOSController.createPaymentLink(req, res))
 );
@@ -33,6 +35,7 @@ router.post(
  */
 router.get(
     '/payment-info/:orderCode',
+    apiKeyAuth,
     asyncHandler((req, res) => payOSController.getPaymentInfo(req, res))
 );
 
@@ -42,6 +45,7 @@ router.get(
  */
 router.get(
     '/orders/:orderCode',
+    apiKeyAuth,
     asyncHandler((req, res) => payOSController.getOrderFromDB(req, res))
 );
 

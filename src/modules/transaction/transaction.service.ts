@@ -44,16 +44,19 @@ export function createTransaction(data: {
  */
 export function findPendingTransaction(
     transId: string,
-    pin: string,
-    serial: string,
-    cardType: string
+    _pin: string,
+    _serial: string,
+    _cardType: string
 ): Transaction | undefined {
+    // Lookup by trans_id first (Primary key for the transaction)
+    // We ignore strict matching of pin/serial/type to handle cases where 
+    // upstream provider might normalize strings (trim spaces, casing, etc.)
     const stmt = db.prepare(`
     SELECT * FROM trans_log 
-    WHERE status = ? AND trans_id = ? AND pin = ? AND seri = ? AND type = ?
+    WHERE status = ? AND trans_id = ?
   `);
 
-    return stmt.get(TransactionStatus.PENDING, transId, pin, serial, cardType) as
+    return stmt.get(TransactionStatus.PENDING, transId) as
         | Transaction
         | undefined;
 }
@@ -104,7 +107,38 @@ export function updateTransactionStatus(params: {
 /**
  * Get unified transaction history (latest transactions from both Card & PayOS)
  */
-export function getTransactionHistory(limit: number = 10): any[] {
+export interface TransactionResult {
+    method: 'card' | 'payos';
+    id: number | string;
+    name: string;
+    amount: number;
+    seri: string;
+    pin: string;
+    type: string;
+    status: number;
+    trans_id: string;
+    date: string;
+    // Additional fields
+    reference?: string;
+    payment_method?: string;
+    declared_amount?: number;
+    actual_amount?: number;
+    discount_rate?: number;
+    net_amount?: number;
+    request_id?: string;
+    callback_raw?: string;
+    ip_address?: string;
+    user_agent?: string;
+    counter_account_name?: string;
+    counter_account_number?: string;
+    transactionDateTime?: string;
+    canceledAt?: string;
+}
+
+/**
+ * Get unified transaction history (latest transactions from both Card & PayOS)
+ */
+export function getTransactionHistory(limit: number = 10): TransactionResult[] {
     const stmt = db.prepare(`
     SELECT 
         'card' as method,
@@ -139,20 +173,20 @@ export function getTransactionHistory(limit: number = 10): any[] {
     ORDER BY date DESC LIMIT ?
   `);
 
-    return stmt.all(limit);
+    return stmt.all(limit) as TransactionResult[];
 }
 
 /**
  * Get transaction by ID (Checks both Card and PayOS)
  */
-export function getTransactionById(id: number): any | undefined {
+export function getTransactionById(id: number): TransactionResult | undefined {
     // Try card first
-    const cardStmt = db.prepare('SELECT *, \'card\' as method FROM trans_log WHERE id = ?');
+    const cardStmt = db.prepare<number, TransactionResult>("SELECT *, 'card' as method FROM trans_log WHERE id = ?");
     const cardTx = cardStmt.get(id);
     if (cardTx) return cardTx;
 
     // Try payos
-    const payosStmt = db.prepare(`
+    const payosStmt = db.prepare<number, TransactionResult>(`
     SELECT 
         'payos' as method,
         orderCode as id, 
@@ -182,8 +216,8 @@ export function getTransactionById(id: number): any | undefined {
 /**
  * Get transaction by trans_id
  */
-export function getTransactionByTransId(transId: string): any | undefined {
-    const stmt = db.prepare('SELECT *, \'card\' as method FROM trans_log WHERE trans_id = ?');
+export function getTransactionByTransId(transId: string): TransactionResult | undefined {
+    const stmt = db.prepare<string, TransactionResult>("SELECT *, 'card' as method FROM trans_log WHERE trans_id = ?");
     const cardTx = stmt.get(transId);
     if (cardTx) return cardTx;
 
@@ -206,7 +240,7 @@ export function searchTransactions(criteria: {
     status?: number;
     limit?: number;
     offset?: number;
-}): any[] {
+}): TransactionResult[] {
     const limit = criteria.limit || 20;
     const offset = criteria.offset || 0;
 
@@ -232,8 +266,8 @@ export function searchTransactions(criteria: {
     WHERE 1=1
   `;
 
-    const cardParams: any[] = [];
-    const payosParams: any[] = [];
+    const cardParams: (string | number)[] = [];
+    const payosParams: (string | number)[] = [];
 
     if (criteria.trans_id) {
         cardQuery += ' AND trans_id = ?';
@@ -286,7 +320,7 @@ export function searchTransactions(criteria: {
 
     const allParams = [...cardParams, ...payosParams, limit, offset];
     const stmt = db.prepare(unifiedQuery);
-    return stmt.all(...allParams);
+    return stmt.all(...allParams) as TransactionResult[];
 }
 
 /**

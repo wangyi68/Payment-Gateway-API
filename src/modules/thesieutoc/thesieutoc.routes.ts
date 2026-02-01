@@ -2,19 +2,20 @@ import { Router } from 'express';
 import { submitCardHandler, getDiscountHandler, checkStatusHandler } from './thesieutoc.controller.js';
 import { callbackHandler } from '../callback/callback.controller.js';
 import { strictRateLimiter } from '../../common/middleware/rate-limit.js';
+import { apiKeyAuth } from '../../common/middleware/auth.js';
 
 const router = Router();
 
-// POST /api/card - Gửi thẻ cào
-router.post('/', strictRateLimiter, submitCardHandler);
+// POST /api/thesieutoc - Gửi thẻ cào
+router.post('/', apiKeyAuth, strictRateLimiter, submitCardHandler);
 
-// GET /api/card/discount/:account? - Lấy chiết khấu
+// GET /api/thesieutoc/discount/:account? - Lấy chiết khấu
 router.get('/discount/:account?', getDiscountHandler);
 
-// POST /api/card/status - Kiểm tra trạng thái thẻ
-router.post('/status', strictRateLimiter, checkStatusHandler);
+// POST /api/thesieutoc/status - Kiểm tra trạng thái thẻ
+router.post('/status', apiKeyAuth, strictRateLimiter, checkStatusHandler);
 
-// POST /api/card/callback - Callback từ TheSieuToc
+// POST /api/thesieutoc/callback - Callback từ TheSieuToc
 router.post('/callback', callbackHandler);
 
 export default router;

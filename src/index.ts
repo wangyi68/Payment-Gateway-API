@@ -8,7 +8,7 @@ import { logger } from './common/utils/logger.js';
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler, requestLogger } from './common/middleware/index.js';
 import { globalRateLimiter } from './common/middleware/rate-limit.js';
-import { initBlacklistTable } from './modules/card/validation.service.js';
+import { initBlacklistTable } from './modules/thesieutoc/validation.service.js';
 import { initRedis, closeRedis } from './jobs/queue.service.js';
 import { startScheduler, stopScheduler } from './jobs/scheduler.service.js';
 import {
@@ -79,11 +79,11 @@ app.get('/rest', (_req, res) => {
         version: '1.1.0',
         description: 'Giải pháp tích hợp Thẻ cào (TheSieuToc) & Ngân hàng (PayOS)',
         endpoints: {
-            card: {
-                'POST /api/card': 'Gửi thẻ cào mới (Viettel, Mobifone, Vinaphone...)',
-                'GET /api/card/discount': 'Lấy bảng chiết khấu thẻ cào hiện tại',
-                'POST /api/card/status': 'Kiểm tra trạng thái thẻ cào bằng transaction_id',
-                'POST /api/card/callback': 'Webhook nhận thông báo kết quả gạch thẻ',
+            thesieutoc: {
+                'POST /api/thesieutoc': 'Gửi thẻ cào mới (Viettel, Mobifone, Vinaphone...)',
+                'GET /api/thesieutoc/discount': 'Lấy bảng chiết khấu thẻ cào hiện tại',
+                'POST /api/thesieutoc/status': 'Kiểm tra trạng thái thẻ cào bằng transaction_id',
+                'POST /api/thesieutoc/callback': 'Webhook nhận thông báo kết quả gạch thẻ',
             },
             transaction: {
                 'GET /api/transaction/history': 'Lấy lịch sử giao dịch gần đây',
@@ -92,10 +92,10 @@ app.get('/rest', (_req, res) => {
             },
             payos: {
                 'POST /api/payos/checkout': 'Khởi tạo link thanh toán VietQR (PayOS)',
-                'POST /api/payos/callback': 'Webhook nhận thông báo thanh toán thành công',
                 'GET /api/payos/payment-info/:orderCode':
                     'Truy vấn thông tin đơn hàng từ PayOS API',
                 'GET /api/payos/orders/:orderCode': 'Truy vấn thông tin đơn hàng từ database local',
+                'POST /api/payos/callback': 'Webhook nhận thông báo thanh toán thành công',
             },
             health: {
                 'GET /health': 'Tổng quan tình trạng hệ thống (Health Check)',

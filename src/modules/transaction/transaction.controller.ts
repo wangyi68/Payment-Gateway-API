@@ -121,21 +121,37 @@ export function getTransactionLogsHandler(req: Request, res: Response<ApiRespons
             return;
         }
 
+        const txData = {
+            id: tx.id,
+            name: tx.name,
+            amount: tx.amount,
+            seri: tx.seri ? `${tx.seri.slice(0, 4)}****${tx.seri.slice(-4)}` : '',
+            type: tx.type,
+            status: tx.status,
+            statusText: getStatusText(tx.status),
+            trans_id: tx.trans_id,
+            date: tx.date,
+            method: tx.method,
+            // Additional fields for PayOS if available
+            ...(tx.method === 'payos' && {
+                reference: tx.reference,
+                payment_method: tx.payment_method,
+            }),
+        };
+
         res.json({
             success: true,
             message: 'Chi tiết giao dịch',
             data: {
-                transaction: {
-                    ...tx,
-                    statusText: getStatusText(tx.status),
-                },
+                transaction: txData,
                 logs: [
                     {
                         time: tx.date,
                         event: 'CREATED',
-                        message: tx.method === 'payos'
-                            ? `Giao dịch được tạo (QR PayOS). OrderCode: ${tx.id}, Amount: ${tx.amount}`
-                            : `Giao dịch được tạo (Card). Serial: ${tx.seri}, Amount: ${tx.amount}`,
+                        message:
+                            tx.method === 'payos'
+                                ? `Giao dịch được tạo (QR PayOS). OrderCode: ${tx.id}, Amount: ${tx.amount}`
+                                : `Giao dịch được tạo (Card). Serial: ${txData.seri}, Amount: ${tx.amount}`,
                     },
                     {
                         time: tx.date,

@@ -1,6 +1,6 @@
 /**
  * Validation Service
- * - Kiểm tra định dạng serial/pin theo từng nhà mạng
+ * - Kiểm tra định dạng serial/pin (Cơ bản)
  * - Quản lý blacklist
  * - Phát hiện thẻ trùng lặp
  */
@@ -23,27 +23,17 @@ export interface ValidationResult {
 // ============================================================
 
 export function validateCardFormat(
-    _cardType: CardType,
     serial: string,
     pin: string
 ): ValidationResult {
     const errors: string[] = [];
 
-    // Kiểm tra độ dài tối thiểu (thường thẻ cào > 6 ký tự)
-    if (serial.length < 6) {
-        errors.push('Serial không hợp lệ (quá ngắn)');
+    // Basic empty check
+    if (!serial || serial.trim() === '') {
+        errors.push('Serial không được để trống');
     }
-    if (pin.length < 6) {
-        errors.push('Mã thẻ không hợp lệ (quá ngắn)');
-    }
-
-    // Chỉ cho phép chữ và số (Alphanumeric)
-    const alphanumericRegex = /^[A-Za-z0-9]+$/;
-    if (!alphanumericRegex.test(serial)) {
-        errors.push('Serial chỉ được chứa chữ và số');
-    }
-    if (!alphanumericRegex.test(pin)) {
-        errors.push('Mã thẻ chỉ được chứa chữ và số');
+    if (!pin || pin.trim() === '') {
+        errors.push('Mã thẻ không được để trống');
     }
 
     return {
@@ -212,7 +202,7 @@ export interface FullValidationResult {
  * 3. Kiểm tra trùng lặp
  */
 export function validateCard(
-    cardType: CardType,
+    _cardType: CardType,
     serial: string,
     pin: string,
     checkDuplicateHours: number = 24
@@ -222,7 +212,7 @@ export function validateCard(
     let duplicateInfo: DuplicateCheckResult['existingTransaction'];
 
     // 1. Kiểm tra định dạng
-    const formatResult = validateCardFormat(cardType, serial, pin);
+    const formatResult = validateCardFormat(serial, pin);
     if (!formatResult.valid) {
         errors.push(...formatResult.errors);
     }

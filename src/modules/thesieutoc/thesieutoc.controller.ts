@@ -23,7 +23,7 @@ import { config } from '../../config/index.js';
 
 /**
  * 1.1 Gửi thẻ cào lên hệ thống
- * POST /api/card
+ * POST /api/thesieutoc
  */
 export async function submitCardHandler(req: Request, res: Response<ApiResponse>): Promise<void> {
     try {
@@ -133,7 +133,7 @@ export async function submitCardHandler(req: Request, res: Response<ApiResponse>
 
 /**
  * 1.0 Lấy chiết khấu thẻ cào
- * GET /api/card/discount/:account?
+ * GET /api/thesieutoc/discount/:account?
  */
 export async function getDiscountHandler(req: Request, res: Response<ApiResponse>): Promise<void> {
     try {
@@ -156,7 +156,7 @@ export async function getDiscountHandler(req: Request, res: Response<ApiResponse
 
 /**
  * 1.3 Kiểm tra trạng thái thẻ cào
- * POST /api/card/status
+ * POST /api/thesieutoc/status
  *
  * Status codes:
  * - "00": Thẻ thành công
@@ -212,14 +212,14 @@ export async function checkStatusHandler(req: Request, res: Response<ApiResponse
                 // Local database
                 local: localTx
                     ? {
-                          id: localTx.id,
-                          name: localTx.name,
-                          amount: localTx.amount,
-                          type: localTx.type,
-                          status: localTx.status,
-                          status_text: getStatusText(localTx.status),
-                          date: localTx.date,
-                      }
+                        id: localTx.id,
+                        name: localTx.name,
+                        amount: localTx.amount,
+                        type: localTx.type,
+                        status: localTx.status,
+                        status_text: getStatusText(localTx.status),
+                        date: localTx.date,
+                    }
                     : null,
             },
         });

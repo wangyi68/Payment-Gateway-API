@@ -33,9 +33,9 @@ echo ""
 # 2. Lấy chiết khấu (không cần API key)
 # ============================================================
 echo -e "${YELLOW}[TEST 2] Lấy chiết khấu${NC}"
-echo "GET ${API_URL}/card/discount"
+echo "GET ${API_URL}/thesieutoc/discount"
 echo "---"
-curl --silent --location "${API_URL}/card/discount" | jq .
+curl --silent --location "${API_URL}/thesieutoc/discount" | jq .
 echo ""
 echo ""
 
@@ -43,9 +43,9 @@ echo ""
 # 3. Gửi thẻ cào (Test validation - Serial/PIN sai format)
 # ============================================================
 echo -e "${YELLOW}[TEST 3] Gửi thẻ - Validation Error (Serial sai format)${NC}"
-echo "POST ${API_URL}/card"
+echo "POST ${API_URL}/thesieutoc"
 echo "---"
-curl --silent --location "${API_URL}/card" \
+curl --silent --location "${API_URL}/thesieutoc" \
   --header 'Content-Type: application/json' \
   --data '{
     "username": "test_user",
@@ -61,7 +61,7 @@ echo ""
 # 4. Gửi thẻ cào (Test với format đúng)
 # ============================================================
 echo -e "${YELLOW}[TEST 4] Gửi thẻ - Format đúng${NC}"
-echo "POST ${API_URL}/card"
+echo "POST ${API_URL}/thesieutoc"
 echo "---"
 
 # Tạo serial và pin ngẫu nhiên (format Viettel)
@@ -69,7 +69,7 @@ RANDOM_SERIAL="1234567890123"
 RANDOM_PIN="123456789012345"
 TRANSACTION_ID=""
 
-RESPONSE=$(curl --silent --location "${API_URL}/card" \
+RESPONSE=$(curl --silent --location "${API_URL}/thesieutoc" \
   --header 'Content-Type: application/json' \
   --data "{
     \"username\": \"test_user_$(date +%s)\",
@@ -93,9 +93,9 @@ echo ""
 # ============================================================
 if [ -n "$TRANSACTION_ID" ]; then
   echo -e "${YELLOW}[TEST 5] Kiểm tra trạng thái thẻ${NC}"
-  echo "POST ${API_URL}/card/status"
+  echo "POST ${API_URL}/thesieutoc/status"
   echo "---"
-  curl --silent --location "${API_URL}/card/status" \
+  curl --silent --location "${API_URL}/thesieutoc/status" \
     --header 'Content-Type: application/json' \
     --data "{
       \"transaction_id\": \"${TRANSACTION_ID}\"
@@ -108,9 +108,9 @@ fi
 # 6. Lịch sử giao dịch
 # ============================================================
 echo -e "${YELLOW}[TEST 6] Lịch sử giao dịch${NC}"
-echo "GET ${API_URL}/history?limit=5"
+echo "GET ${API_URL}/transaction/history?limit=5"
 echo "---"
-curl --silent --location "${API_URL}/history?limit=5" | jq .
+curl --silent --location "${API_URL}/transaction/history?limit=5" | jq .
 echo ""
 echo ""
 
@@ -119,9 +119,9 @@ echo ""
 # ============================================================
 if [ -n "$TRANSACTION_ID" ]; then
   echo -e "${YELLOW}[TEST 7] Callback - Thẻ thành công${NC}"
-  echo "POST ${API_URL}/callback (urlencoded)"
+  echo "POST ${API_URL}/thesieutoc/callback (urlencoded)"
   echo "---"
-  curl --silent --location "${API_URL}/callback" \
+  curl --silent --location "${API_URL}/thesieutoc/callback" \
     --data-urlencode "status=thanhcong" \
     --data-urlencode "serial=${RANDOM_SERIAL}" \
     --data-urlencode "pin=${RANDOM_PIN}" \
@@ -136,9 +136,9 @@ if [ -n "$TRANSACTION_ID" ]; then
 
   # Kiểm tra lại trạng thái sau callback
   echo -e "${YELLOW}[TEST 8] Kiểm tra trạng thái sau callback${NC}"
-  echo "POST ${API_URL}/card/status"
+  echo "POST ${API_URL}/thesieutoc/status"
   echo "---"
-  curl --silent --location "${API_URL}/card/status" \
+  curl --silent --location "${API_URL}/thesieutoc/status" \
     --header 'Content-Type: application/json' \
     --data "{
       \"transaction_id\": \"${TRANSACTION_ID}\"
@@ -154,7 +154,7 @@ echo -e "${YELLOW}[TEST 9] Gửi thẻ mới để test sai mệnh giá${NC}"
 RANDOM_SERIAL2="9876543210123"
 RANDOM_PIN2="987654321012345"
 
-RESPONSE2=$(curl --silent --location "${API_URL}/card" \
+RESPONSE2=$(curl --silent --location "${API_URL}/thesieutoc" \
   --header 'Content-Type: application/json' \
   --data "{
     \"username\": \"test_saimenhgia_$(date +%s)\",
@@ -170,9 +170,9 @@ echo ""
 
 if [ -n "$TRANSACTION_ID2" ]; then
   echo -e "${YELLOW}[TEST 10] Callback - Sai mệnh giá${NC}"
-  echo "POST ${API_URL}/callback"
+  echo "POST ${API_URL}/thesieutoc/callback"
   echo "---"
-  curl --silent --location "${API_URL}/callback" \
+  curl --silent --location "${API_URL}/thesieutoc/callback" \
     --data-urlencode "status=saimenhgia" \
     --data-urlencode "serial=${RANDOM_SERIAL2}" \
     --data-urlencode "pin=${RANDOM_PIN2}" \
@@ -193,7 +193,7 @@ echo -e "${YELLOW}[TEST 11] Gửi thẻ mới để test thất bại${NC}"
 RANDOM_SERIAL3="5555555555555"
 RANDOM_PIN3="666666666666666"
 
-RESPONSE3=$(curl --silent --location "${API_URL}/card" \
+RESPONSE3=$(curl --silent --location "${API_URL}/thesieutoc" \
   --header 'Content-Type: application/json' \
   --data "{
     \"username\": \"test_thatbai_$(date +%s)\",
@@ -209,9 +209,9 @@ echo ""
 
 if [ -n "$TRANSACTION_ID3" ]; then
   echo -e "${YELLOW}[TEST 12] Callback - Thất bại${NC}"
-  echo "POST ${API_URL}/callback"
+  echo "POST ${API_URL}/thesieutoc/callback"
   echo "---"
-  curl --silent --location "${API_URL}/callback" \
+  curl --silent --location "${API_URL}/thesieutoc/callback" \
     --data-urlencode "status=thatbai" \
     --data-urlencode "serial=${RANDOM_SERIAL3}" \
     --data-urlencode "pin=${RANDOM_PIN3}" \
@@ -234,6 +234,6 @@ echo -e "${BLUE}============================================================${NC
 echo ""
 echo "Kiểm tra các file log:"
 echo "  - logs/combined.log"
-echo "  - logs/card.log"
-echo "  - logs/cardsuccess.log (thẻ thành công)"
+echo "  - logs/thesieutoc.log"
+echo "  - logs/thesieutoc_success.log (thẻ thành công)"
 echo ""

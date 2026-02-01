@@ -1,5 +1,29 @@
 const API_URL = '/api';
 
+// Helper: Get Auth Headers
+const getHeaders = () => {
+    const apiKey = document.getElementById('api_key_input').value;
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) {
+        headers['x-api-key'] = apiKey;
+    }
+    return headers;
+};
+
+// Helper: Save API Key to localStorage
+const saveApiKey = () => {
+    const apiKey = document.getElementById('api_key_input').value;
+    localStorage.setItem('pg_api_key', apiKey);
+};
+
+// Helper: Load API Key from localStorage
+const loadApiKey = () => {
+    const apiKey = localStorage.getItem('pg_api_key');
+    if (apiKey) {
+        document.getElementById('api_key_input').value = apiKey;
+    }
+};
+
 // --- Tab Management System ---
 function initTabs() {
     const tabBtns = document.querySelectorAll('.tab-btn');
@@ -48,7 +72,9 @@ const formatCurrency = (amount) => {
 
 async function fetchDiscounts() {
     try {
-        const response = await fetch(`${API_URL}/card/discount`);
+        const response = await fetch(`${API_URL}/thesieutoc/discount`, {
+            headers: getHeaders()
+        });
         const data = await response.json();
 
         if (data.success && data.data) {
@@ -99,6 +125,8 @@ async function handleCardSubmit(event) {
         btn.querySelector('span').innerText = 'Đang gửi...';
         loader.style.display = 'block';
 
+        saveApiKey(); // Save key on submit
+
         const payload = {
             username: document.getElementById('username').value,
             card_type: document.getElementById('card_type').value,
@@ -107,9 +135,9 @@ async function handleCardSubmit(event) {
             pin: document.getElementById('pin').value
         };
 
-        const response = await fetch(`${API_URL}/card`, {
+        const response = await fetch(`${API_URL}/thesieutoc`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(),
             body: JSON.stringify(payload)
         });
 
@@ -119,7 +147,11 @@ async function handleCardSubmit(event) {
             alert('Thẻ đã được gửi thành công! Vui lòng chờ hệ thống duyệt.');
             document.getElementById('card-form').reset();
         } else {
-            alert('Lỗi: ' + (data.message || 'Không thể gửi thẻ'));
+            let msg = 'Lỗi: ' + (data.message || 'Không thể gửi thẻ');
+            if (data.error) {
+                msg += '\nChi tiết: ' + JSON.stringify(data.error);
+            }
+            alert(msg);
         }
     } catch (error) {
         console.error('Error:', error);
@@ -144,6 +176,8 @@ async function handlePayOSSubmit(event) {
         btn.querySelector('span').innerText = 'Đang khởi tạo...';
         loader.style.display = 'block';
 
+        saveApiKey();
+
         const payload = {
             amount: Number(document.getElementById('amount').value),
             description: document.getElementById('description').value,
@@ -153,7 +187,7 @@ async function handlePayOSSubmit(event) {
 
         const response = await fetch(`${API_URL}/payos/checkout`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(),
             body: JSON.stringify(payload)
         });
 
@@ -191,7 +225,7 @@ async function displayTransactionInfo() {
 async function fetchOrderDetails(orderCode) {
     try {
         // Try local DB first
-        let response = await fetch(`${API_URL}/payos/orders/${orderCode}`);
+        let response = await fetch(`${API_URL}/payos/orders/${orderCode}`, { headers: getHeaders() });
         let data = await response.json();
 
         if (data.success && data.data) {
@@ -200,7 +234,7 @@ async function fetchOrderDetails(orderCode) {
         }
 
         // Fallback to PayOS API info
-        response = await fetch(`${API_URL}/payos/payment-info/${orderCode}`);
+        response = await fetch(`${API_URL}/payos/payment-info/${orderCode}`, { headers: getHeaders() });
         data = await response.json();
 
         if (data.success && data.data) {
@@ -220,6 +254,8 @@ function updateOrderUI(data) {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    loadApiKey(); // Load saved key
+
     // Setup Navigation
     initTabs();
 

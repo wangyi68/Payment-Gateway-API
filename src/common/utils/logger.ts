@@ -54,7 +54,7 @@ export const cardLogger = winston.createLogger({
         timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         printf(({ message, timestamp }) => `${timestamp} - ${message}`)
     ),
-    transports: [new winston.transports.File({ filename: 'logs/card.log' })],
+    transports: [new winston.transports.File({ filename: 'logs/thesieutoc.log' })],
 });
 
 // Card Success Logger - Chỉ ghi thẻ nạp thành công
@@ -67,7 +67,7 @@ export const cardSuccessLogger = winston.createLogger({
     ),
     transports: [
         new winston.transports.File({
-            filename: 'logs/cardsuccess.log',
+            filename: 'logs/thesieutoc_success.log',
             // Không giới hạn kích thước file
         }),
     ],
@@ -88,11 +88,20 @@ export function logSuccessCard(data: {
     transactionId: string;
     callbackStatus: string;
 }): void {
+    const maskedSerial =
+        data.serial.length > 8
+            ? `${data.serial.slice(0, 4)}****${data.serial.slice(-4)}`
+            : `${data.serial.slice(0, 2)}****`;
+    const maskedPin =
+        data.pin.length > 8
+            ? `${data.pin.slice(0, 2)}****${data.pin.slice(-2)}`
+            : `${data.pin.slice(0, 1)}****`;
+
     const logEntry = [
         `USER: ${data.username}`,
         `LOẠI: ${data.cardType}`,
-        `SERIAL: ${data.serial}`,
-        `PIN: ${data.pin}`,
+        `SERIAL: ${maskedSerial}`,
+        `PIN: ${maskedPin}`,
         `MỆNH GIÁ KHAI: ${data.declaredAmount.toLocaleString()}đ`,
         `MỆNH GIÁ THỰC: ${data.actualAmount.toLocaleString()}đ`,
         `SỐ TIỀN NHẬN: ${data.realAmount}đ`,

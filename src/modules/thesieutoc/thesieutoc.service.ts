@@ -44,18 +44,22 @@ export async function submitCard(
     transactionId: string
 ): Promise<TheSieuTocSubmitResponse> {
     try {
-        const params = new URLSearchParams({
+        const payload = {
             APIkey: config.thesieutoc.apiKey,
             mathe: data.pin,
             seri: data.serial,
             type: data.card_type,
             menhgia: data.card_amount,
             content: transactionId,
-        });
+        };
 
-        // API supports both GET and POST
-        const response = await api.get<TheSieuTocSubmitResponse>(
-            `/chargingws/v2?${params.toString()}`
+        // Switch to POST for better security (avoiding sensitive data in URL/web server logs)
+        const response = await api.post<TheSieuTocSubmitResponse>(
+            '/chargingws/v2',
+            new URLSearchParams(payload),
+            {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            }
         );
 
         logger.info(

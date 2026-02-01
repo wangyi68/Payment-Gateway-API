@@ -45,6 +45,9 @@ const envSchema = z.object({
 
     // Logging
     LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
+
+    // Security
+    API_SECRET_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -86,10 +89,10 @@ export const config = {
     },
     redis: parsed.data.REDIS_HOST
         ? {
-              host: parsed.data.REDIS_HOST,
-              port: parsed.data.REDIS_PORT,
-              password: parsed.data.REDIS_PASSWORD,
-          }
+            host: parsed.data.REDIS_HOST,
+            port: parsed.data.REDIS_PORT,
+            password: parsed.data.REDIS_PASSWORD,
+        }
         : null,
     scheduler: {
         enabled: parsed.data.SCHEDULER_ENABLED,
@@ -104,6 +107,9 @@ export const config = {
     },
     logging: {
         level: parsed.data.LOG_LEVEL,
+    },
+    security: {
+        apiKey: parsed.data.API_SECRET_KEY,
     },
 } as const;
 

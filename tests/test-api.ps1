@@ -29,9 +29,9 @@ Write-Host ""
 # 2. Lay chiet khau
 # ============================================================
 Write-Host "[TEST 2] Lay chiet khau" -ForegroundColor Yellow
-Write-Host "GET $ApiUrl/card/discount"
+Write-Host "GET $ApiUrl/thesieutoc/discount"
 Write-Host "---"
-$response = Invoke-RestMethod -Uri "$ApiUrl/card/discount" -Method Get -Headers $Headers
+$response = Invoke-RestMethod -Uri "$ApiUrl/thesieutoc/discount" -Method Get -Headers $Headers
 $response | ConvertTo-Json -Depth 10
 Write-Host ""
 
@@ -39,7 +39,7 @@ Write-Host ""
 # 3. Gui the - Validation Error
 # ============================================================
 Write-Host "[TEST 3] Gui the - Validation Error (Serial sai format)" -ForegroundColor Yellow
-Write-Host "POST $ApiUrl/card"
+Write-Host "POST $ApiUrl/thesieutoc"
 Write-Host "---"
 $body = @{
     username    = "test_user"
@@ -50,7 +50,7 @@ $body = @{
 } | ConvertTo-Json
 
 try {
-    $response = Invoke-RestMethod -Uri "$ApiUrl/card" -Method Post -Body $body -ContentType "application/json" -Headers $Headers
+    $response = Invoke-RestMethod -Uri "$ApiUrl/thesieutoc" -Method Post -Body $body -ContentType "application/json" -Headers $Headers
     $response | ConvertTo-Json -Depth 10
 }
 catch {
@@ -62,7 +62,7 @@ Write-Host ""
 # 4. Gui the - Format dung
 # ============================================================
 Write-Host "[TEST 4] Gui the - Format dung" -ForegroundColor Yellow
-Write-Host "POST $ApiUrl/card"
+Write-Host "POST $ApiUrl/thesieutoc"
 Write-Host "---"
 
 $randomSerial = "1234567890123"
@@ -78,7 +78,7 @@ $body = @{
 } | ConvertTo-Json
 
 try {
-    $response = Invoke-RestMethod -Uri "$ApiUrl/card" -Method Post -Body $body -ContentType "application/json" -Headers $Headers
+    $response = Invoke-RestMethod -Uri "$ApiUrl/thesieutoc" -Method Post -Body $body -ContentType "application/json" -Headers $Headers
     $response | ConvertTo-Json -Depth 10
     $transactionId = $response.data.transaction_id
     Write-Host "Transaction ID: $transactionId" -ForegroundColor Green
@@ -94,13 +94,13 @@ Write-Host ""
 # ============================================================
 if ($transactionId) {
     Write-Host "[TEST 5] Kiem tra trang thai the" -ForegroundColor Yellow
-    Write-Host "POST $ApiUrl/card/status"
+    Write-Host "POST $ApiUrl/thesieutoc/status"
     Write-Host "---"
     $body = @{
         transaction_id = $transactionId
     } | ConvertTo-Json
     
-    $response = Invoke-RestMethod -Uri "$ApiUrl/card/status" -Method Post -Body $body -ContentType "application/json" -Headers $Headers
+    $response = Invoke-RestMethod -Uri "$ApiUrl/thesieutoc/status" -Method Post -Body $body -ContentType "application/json" -Headers $Headers
     $response | ConvertTo-Json -Depth 10
     Write-Host ""
 }
@@ -109,9 +109,9 @@ if ($transactionId) {
 # 6. Lich su giao dich
 # ============================================================
 Write-Host "[TEST 6] Lich su giao dich" -ForegroundColor Yellow
-Write-Host "GET $ApiUrl/history?limit=5"
+Write-Host "GET $ApiUrl/transaction/history?limit=5"
 Write-Host "---"
-$response = Invoke-RestMethod -Uri "$ApiUrl/history?limit=5" -Method Get -Headers $Headers
+$response = Invoke-RestMethod -Uri "$ApiUrl/transaction/history?limit=5" -Method Get -Headers $Headers
 $response | ConvertTo-Json -Depth 10
 Write-Host ""
 
@@ -120,13 +120,13 @@ Write-Host ""
 # ============================================================
 if ($transactionId) {
     Write-Host "[TEST 7] Callback - The thanh cong" -ForegroundColor Yellow
-    Write-Host "POST $ApiUrl/callback (urlencoded)"
+    Write-Host "POST $ApiUrl/thesieutoc/callback (urlencoded)"
     Write-Host "---"
     
     $callbackBody = "status=thanhcong&serial=$randomSerial&pin=$randomPin&card_type=Viettel&amount=50000&receive_amount=50000&real_amount=42500&noidung=The+Thanh+Cong&content=$transactionId"
     
     try {
-        $response = Invoke-RestMethod -Uri "$ApiUrl/callback" -Method Post -Body $callbackBody -ContentType "application/x-www-form-urlencoded" -Headers $Headers
+        $response = Invoke-RestMethod -Uri "$ApiUrl/thesieutoc/callback" -Method Post -Body $callbackBody -ContentType "application/x-www-form-urlencoded" -Headers $Headers
         $response | ConvertTo-Json -Depth 10
     }
     catch {
@@ -140,7 +140,7 @@ if ($transactionId) {
         transaction_id = $transactionId
     } | ConvertTo-Json
     
-    $response = Invoke-RestMethod -Uri "$ApiUrl/card/status" -Method Post -Body $body -ContentType "application/json" -Headers $Headers
+    $response = Invoke-RestMethod -Uri "$ApiUrl/thesieutoc/status" -Method Post -Body $body -ContentType "application/json" -Headers $Headers
     $response | ConvertTo-Json -Depth 10
     Write-Host ""
 }
@@ -154,6 +154,6 @@ Write-Host "============================================================" -Foreg
 Write-Host ""
 Write-Host "Kiem tra cac file log:"
 Write-Host "  - logs/combined.log"
-Write-Host "  - logs/card.log"
-Write-Host "  - logs/cardsuccess.log (the thanh cong)"
+Write-Host "  - logs/thesieutoc.log"
+Write-Host "  - logs/thesieutoc_success.log (the thanh cong)"
 Write-Host ""

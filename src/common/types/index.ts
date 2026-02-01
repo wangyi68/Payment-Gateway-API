@@ -48,14 +48,8 @@ export const SubmitCardRequest = z.object({
     username: z.string().min(1, 'Username is required').max(100),
     card_type: CardType,
     card_amount: CardAmount,
-    serial: z
-        .string()
-        .min(1, 'Serial is required')
-        .regex(/^[A-Za-z0-9]+$/, 'Serial must contain only letters and numbers'),
-    pin: z
-        .string()
-        .min(1, 'PIN is required')
-        .regex(/^[A-Za-z0-9]+$/, 'PIN must contain only letters and numbers'),
+    serial: z.string().min(1, 'Serial is required'),
+    pin: z.string().min(1, 'PIN is required'),
 });
 export type SubmitCardRequest = z.infer<typeof SubmitCardRequest>;
 

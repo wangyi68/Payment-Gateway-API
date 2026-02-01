@@ -74,15 +74,15 @@ if ($Confirm -ne 'y') { Write-Host "Da huy."; exit }
 Write-Host "`nDang gui request..." -ForegroundColor Cyan
 
 $body = @{
-    username = $Username
-    card_type = $CardType
+    username    = $Username
+    card_type   = $CardType
     card_amount = $CardAmount
-    serial = $Serial
-    pin = $Pin
+    serial      = $Serial
+    pin         = $Pin
 } | ConvertTo-Json
 
 try {
-    $response = Invoke-RestMethod -Uri "$ApiUrl/card" -Method Post -Body $body -ContentType "application/json" -Headers $Headers
+    $response = Invoke-RestMethod -Uri "$ApiUrl/thesieutoc" -Method Post -Body $body -ContentType "application/json" -Headers $Headers
     
     if ($response.success) {
         Write-Host "`n[OK] GUI THE THANH CONG!" -ForegroundColor Green
@@ -94,37 +94,43 @@ try {
         # 7. Tu dong kiem tra trang thai
         Write-Host "`nDang theo doi trang thai the (Ctrl+C de thoat)..." -ForegroundColor Yellow
         
-        for ($i=1; $i -le 10; $i++) {
+        for ($i = 1; $i -le 10; $i++) {
             Start-Sleep -Seconds 5
             Write-Host "[$i] Checking status..." -NoNewline
             
             $statusBody = @{ transaction_id = $transId } | ConvertTo-Json
             try {
-                $statusRes = Invoke-RestMethod -Uri "$ApiUrl/card/status" -Method Post -Body $statusBody -ContentType "application/json" -Headers $Headers
+                $statusRes = Invoke-RestMethod -Uri "$ApiUrl/thesieutoc/status" -Method Post -Body $statusBody -ContentType "application/json" -Headers $Headers
                 
                 $remoteStatus = $statusRes.data.api_status_text
                 $localStatus = $statusRes.data.local.status_text
                 
                 Write-Host " -> Server: $remoteStatus | Local: $localStatus"
                 
-                if ($statusRes.data.local.status -eq 1) { # Thanh cong
-                     Write-Host "`n[SUCCESS] THE NAP THANH CONG! KIEM TRA LOG." -ForegroundColor Green
-                     break
-                } elseif ($statusRes.data.local.status -eq 2 -or $statusRes.data.local.status -eq 3) { # That bai hoac Sai menh gia
-                     Write-Host "`n[FAILED] THE LOI HOAC SAI MENH GIA." -ForegroundColor Red
-                     break
+                if ($statusRes.data.local.status -eq 1) {
+                    # Thanh cong
+                    Write-Host "`n[SUCCESS] THE NAP THANH CONG! KIEM TRA LOG." -ForegroundColor Green
+                    break
                 }
-            } catch {
+                elseif ($statusRes.data.local.status -eq 2 -or $statusRes.data.local.status -eq 3) {
+                    # That bai hoac Sai menh gia
+                    Write-Host "`n[FAILED] THE LOI HOAC SAI MENH GIA." -ForegroundColor Red
+                    break
+                }
+            }
+            catch {
                 Write-Host " Loi check status."
             }
         }
-    } else {
+    }
+    else {
         Write-Host "`n[ERROR] GUI THE THAT BAI!" -ForegroundColor Red
         Write-Host "Error: $($response.error)"
         Write-Host "Message: $($response.message)"
     }
 
-} catch {
+}
+catch {
     Write-Host "`n[ERROR] LOI KET NOI HOAC SERVER ERROR" -ForegroundColor Red
     Write-Host $_.Exception.Message
     if ($_.Exception.Response) {

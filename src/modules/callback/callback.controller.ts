@@ -13,8 +13,9 @@ import {
     logSuccessPayment,
 } from '../../common/utils/logger.js';
 import { removePendingCheck } from '../../jobs/queue.service.js';
-import { payOSService, PayOSWebhookPayload, PayOSPaymentData } from '../payment/payos.service.js';
+import { payOSService, PayOSWebhookPayload, PayOSPaymentData } from '../payos/payos.service.js';
 import { PayOSSignatureError } from '../../common/errors/index.js';
+import { checkCardStatus } from '../thesieutoc/thesieutoc.service.js';
 
 // ============================================================
 // TheSieuToc Callback Handler
@@ -23,7 +24,7 @@ import { PayOSSignatureError } from '../../common/errors/index.js';
 /**
  * TheSieuToc Callback Handler
  * POST /api/callback (legacy)
- * POST /api/card/callback
+ * POST /api/thesieutoc/callback
  *
  * Nhận callback từ TheSieuToc khi thẻ được xử lý xong
  *
@@ -38,7 +39,10 @@ import { PayOSSignatureError } from '../../common/errors/index.js';
  * - noidung: Thông báo kết quả
  * - content: Mã đối chiếu (transaction_id)
  */
-export function theSieuTocCallbackHandler(req: Request, res: Response<ApiResponse>): void {
+export async function theSieuTocCallbackHandler(
+    req: Request,
+    res: Response<ApiResponse>
+): Promise<void> {
     try {
         logger.info(`[TheSieuToc Callback] Nhận callback: ${JSON.stringify(req.body)}`);
 
@@ -71,6 +75,34 @@ export function theSieuTocCallbackHandler(req: Request, res: Response<ApiRespons
                 success: false,
                 message: 'Không tìm thấy giao dịch',
                 error: `Không có giao dịch pending với mã: ${data.content}`,
+            });
+            return;
+        }
+
+        // ============================================================
+        // SECURITY DOUBLE CHECK
+        // Check actual status from TheSieuToc API to prevent spoofed callbacks
+        // ============================================================
+        try {
+            const apiStatus = await checkCardStatus(data.content);
+
+            // Normalize callback status for validation
+            // If callback says success/wrong_amount, the API MUST agree
+            if (data.status === CALLBACK_STATUS.SUCCESS && apiStatus.status !== '00') {
+                throw new Error(`Mâu thuẫn trạng thái: Callback=Thành công, API=${apiStatus.status}`);
+            }
+            if (data.status === CALLBACK_STATUS.WRONG_AMOUNT && apiStatus.status !== '99') {
+                throw new Error(
+                    `Mâu thuẫn trạng thái: Callback=Sai mệnh giá, API=${apiStatus.status}`
+                );
+            }
+            // Note: If data.status is 'thatbai', we can usually accept it directly or check for -10/non-00 status
+        } catch (error) {
+            logger.error(`[TheSieuToc Callback] SECURITY ALERT - Xác thực thất bại: ${error}`);
+            res.status(403).json({
+                success: false,
+                message: 'Xác thực giao dịch không hợp lệ',
+                error: 'Không thể xác thực trạng thái giao dịch với nhà cung cấp',
             });
             return;
         }
@@ -162,8 +194,8 @@ export function theSieuTocCallbackHandler(req: Request, res: Response<ApiRespons
         // Log to card.log file (tất cả giao dịch)
         cardLogger.info(
             `User: ${transaction.name} | Status: ${data.status} | ` +
-                `Type: ${data.card_type} | Amount: ${data.amount} | ` +
-                `Real: ${data.real_amount} | Content: ${data.content}`
+            `Type: ${data.card_type} | Amount: ${data.amount} | ` +
+            `Real: ${data.real_amount} | Content: ${data.content}`
         );
 
         res.json({
